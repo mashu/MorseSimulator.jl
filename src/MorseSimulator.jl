@@ -17,23 +17,24 @@ The simulation consists of five conceptual layers:
 using MorseSimulator, Random
 
 rng = MersenneTwister(42)
-
-# Phase 1: Generate a transcript
-transcript = generate_transcript(rng; num_stations=3)
-plot_transcript(transcript)
-
-# Phase 2: Generate spectrogram (fast, direct path)
 config = DatasetConfig(path=DirectPath())
-sample = generate_sample(rng, config)
-display(plot_spectrogram(sample.mel_spectrogram))
 
-# Generate with audio for inspection
+# Option A: Generate sample (spectrogram + optional audio) — new transcript each time
+sample = generate_sample(rng, config)
 sample, audio = generate_sample_with_audio(rng, config)
 save_audio("test.wav", audio)
-display(plot_waveform(audio))
-display(plot_spectrogram(sample.mel_spectrogram))
+# Use a varying rng (e.g. different seed or next rand) to get different content.
 
-# Compare generation paths
+# Option B: Generate transcript first, inspect, then generate from it
+scene = BandScene(rng; num_stations=3)
+transcript = generate_transcript(rng, scene)
+plot_transcript(transcript)
+# Now generate spectrogram or audio from this exact transcript
+sample = generate_sample(rng, config, transcript, scene)
+sample, audio = generate_sample_with_audio(rng, config, transcript, scene)
+save_audio("inspection.wav", audio)
+
+# Compare generation paths (same transcript → audio path vs direct path)
 spec_audio, _ = generate_spectrogram(AudioPath(), rng, transcript, scene)
 spec_direct = generate_spectrogram(DirectPath(), rng, transcript, scene)
 report = compare_paths(spec_audio, spec_direct)

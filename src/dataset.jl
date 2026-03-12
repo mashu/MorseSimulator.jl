@@ -71,8 +71,18 @@ end
 
 """
     generate_sample(rng, config) -> DatasetSample
+    generate_sample(rng, config, transcript, scene) -> DatasetSample
 
 Generate a single training sample.
+
+- **Without transcript**: draws a new band scene and generates a new transcript
+  internally. Use a varying `rng` (e.g. different seeds or advancing the RNG)
+  to get different content each time.
+
+- **With transcript and scene**: uses the given transcript and band scene to
+  generate the spectrogram (and optionally audio). Use this when you have
+  already generated and inspected a transcript and want to produce the
+  corresponding sample from it.
 """
 function generate_sample(rng::AbstractRNG, config::DatasetConfig)
     n_stations = rand(rng, config.num_stations_range)
@@ -81,8 +91,14 @@ function generate_sample(rng::AbstractRNG, config::DatasetConfig)
     scene = BandScene(rng; num_stations=n_stations)
     transcript = generate_transcript(rng, scene)
 
+    return generate_sample(rng, config, transcript, scene)
+end
+
+function generate_sample(rng::AbstractRNG, config::DatasetConfig,
+                        transcript::Transcript, scene::BandScene)
     result = _generate_spec(config.path, rng, transcript, scene, config)
 
+    n_stations = length(scene.stations)
     metadata = Dict{String,Any}(
         "mode" => transcript.mode_name,
         "contest" => transcript.contest_name,
@@ -135,20 +151,31 @@ generate_dataset(n::Int; kwargs...) =
 
 """
     generate_sample_with_audio(rng, config) -> (DatasetSample, MixedSignal)
+    generate_sample_with_audio(rng, config, transcript, scene) -> (DatasetSample, MixedSignal)
 
 Generate a sample with both spectrogram and audio for inspection.
-Always uses AudioPath regardless of config.
+Always uses AudioPath (full audio synthesis) regardless of config.
+
+- **Without transcript**: generates a new scene and transcript internally; vary
+  `rng` for different content.
+- **With transcript and scene**: uses the given transcript and scene to generate
+  the audio and spectrogram (e.g. after inspecting the transcript).
 """
 function generate_sample_with_audio(rng::AbstractRNG, config::DatasetConfig)
     n_stations = rand(rng, config.num_stations_range)
     scene = BandScene(rng; num_stations=n_stations)
     transcript = generate_transcript(rng, scene)
+    return generate_sample_with_audio(rng, config, transcript, scene)
+end
 
+function generate_sample_with_audio(rng::AbstractRNG, config::DatasetConfig,
+                                   transcript::Transcript, scene::BandScene)
     result, mixed = generate_spectrogram(AudioPath(), rng, transcript, scene;
         sample_rate=config.sample_rate,
         stft_config=config.stft_config,
         filterbank=config.filterbank)
 
+    n_stations = length(scene.stations)
     metadata = Dict{String,Any}(
         "mode" => transcript.mode_name,
         "contest" => transcript.contest_name,

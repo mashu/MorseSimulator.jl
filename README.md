@@ -70,13 +70,18 @@ println(annotated_text(transcript))
 
 ### Phase 2: Generate Spectrograms
 
+Two styles, via **multiple dispatch**:
+
+**A. Generate sample directly** — each call creates a new scene and transcript internally. Use a varying `rng` (e.g. different seeds) for different content.
+
 ```julia
-# Fast dataset generation (no audio)
 config = DatasetConfig(path=DirectPath(), n_mels=40, f_min=200.0, f_max=900.0)
+
+# Spectrogram only (fast)
 sample = generate_sample(rng, config)
 display(plot_spectrogram(sample.mel_spectrogram))
 
-# Generate with audio for inspection
+# Spectrogram + audio for inspection
 sample, audio = generate_sample_with_audio(rng, config)
 save_audio("inspection.wav", audio)
 display(plot_waveform(audio))
@@ -85,11 +90,29 @@ display(plot_waveform(audio))
 dataset = generate_dataset(rng, 1000, config)
 ```
 
-### Compare Generation Paths
+**B. Generate transcript first, then sample from it** — inspect the transcript, then generate the corresponding spectrogram (or audio) from that exact transcript.
 
 ```julia
-transcript = generate_transcript(rng; num_stations=2)
+# Same scene for transcript and spectrogram (required)
+scene = BandScene(rng; num_stations=3)
+transcript = generate_transcript(rng, scene)
+plot_transcript(transcript)
+
+# Generate sample from this transcript (respects config.path: DirectPath or AudioPath)
+sample = generate_sample(rng, config, transcript, scene)
+
+# Or spectrogram + audio (always uses AudioPath)
+sample, audio = generate_sample_with_audio(rng, config, transcript, scene)
+save_audio("inspection.wav", audio)
+```
+
+### Compare Generation Paths
+
+Use one scene and transcript for both paths:
+
+```julia
 scene = BandScene(rng; num_stations=2)
+transcript = generate_transcript(rng, scene)
 
 spec_audio, _ = generate_spectrogram(AudioPath(), rng, transcript, scene)
 spec_direct = generate_spectrogram(DirectPath(), rng, transcript, scene)
@@ -123,7 +146,9 @@ AbstractConsistencyMetric→ L2SpectralError, CosineSimilarity, KLDivergence, ..
 ```
 
 Behavior differences are expressed via **multiple dispatch**, not `if`/`typeof`/`isa` checks.
-For example, the same function `generate_cq` produces different CQ calls depending on operator style:
+
+- **Dataset API**: `generate_sample(rng, config)` creates a new scene and transcript; `generate_sample(rng, config, transcript, scene)` uses the given transcript and scene. Same for `generate_sample_with_audio`.
+- **Phrase generation**: `generate_cq(rng, station, style)` produces different CQ calls depending on operator style:
 
 ```julia
 generate_cq(rng, station, ::FastContestOp)      # "CQ SO5KM"
@@ -228,7 +253,11 @@ MorseSimulator.jl/
 
 - **Amplitude**: Each station gets `signal_amplitude ~ LogNormal` (in `Station`); path loss varies per station via propagation, so received levels differ. Relative levels are preserved when mixing; normalization only sets overall scale.
 - **SNR (realistic model)**: Noise is **band noise** from the scene’s `noise_floor_db` (drawn per scene, e.g. −28 to −12 dB). Signal levels vary by station and path loss. So **SNR emerges** from “fixed” band noise + variable signals (correct causal model). Widening the noise-floor range gives a wide spread of SNRs across samples without retrofitting noise to a target SNR.
-- **WPM**: Per transmission we sample `instantaneous_wpm(rng, station)` from Normal(mean_wpm(style), wpm_sigma(style)); within a transmission, WPM drifts (see `text_to_timed_events`). So speed varies by operator style, by transmission, and within a transmission.
+- **WPM (default range and distribution)**:
+  - Each station has an **operator style**; each style has a **mean WPM** (12–32) and **σ** (1–3) — see Operator Styles table. Effective default WPM range across styles is about **8–35** (clamped in code to ≥ 8).
+  - **Per station**: WPM is drawn from **Normal(μ, σ)** with μ = `mean_wpm(station.style)` and σ = `wpm_sigma(station.style)`, so each station’s speed is centered on its style mean with a proper Normal distribution.
+  - **Per transmission**: Each transmission gets a new sample via `instantaneous_wpm(rng, station)`.
+  - **Within a transmission**: WPM **drifts** in `text_to_timed_events` (random walk with default `drift = 0.01`), so speed varies slightly character-to-character.
 
 ## Dependencies
 

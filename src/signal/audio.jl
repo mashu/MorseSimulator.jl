@@ -3,10 +3,12 @@
 
 Audio file I/O for saving and loading WAV files.
 Supports PCM 16-bit, 44100 Hz, Mono format.
-Uses LibSndFile for robust audio I/O.
+Uses FileIO + LibSndFile for robust audio I/O.
 """
 
+using FileIO
 using LibSndFile
+using SampledSignals: PCM16Sample
 
 """
     AudioConfig
@@ -39,16 +41,16 @@ end
 """
     save_wav(path, samples, sample_rate)
 
-Save raw samples to a WAV file using LibSndFile.
+Save raw samples to a WAV file using FileIO + LibSndFile.
+Output format: 44100 Hz, 16-bit PCM, mono (when using default config).
 Samples should be in [-1, 1] range.
 """
 function save_wav(path::AbstractString, samples::Vector{T},
                   sample_rate::Int) where T<:AbstractFloat
-    # Ensure samples are in proper range
+    # Ensure samples are in proper range, then convert to 16-bit PCM for compatibility (e.g. aplay)
     clipped = clamp.(samples, T(-1), T(1))
-    # LibSndFile expects matrix: samples × channels
-    data = reshape(clipped, :, 1)
-    LibSndFile.save(path, data, sample_rate)
+    data_16 = reshape(PCM16Sample.(clipped), :, 1)
+    FileIO.save(path, data_16; samplerate=sample_rate)
     return path
 end
 
@@ -58,7 +60,7 @@ end
 Load a WAV file and return samples and sample rate.
 """
 function load_wav(path::AbstractString)
-    data = LibSndFile.load(path)
+    data = FileIO.load(path)
     sr = Int(LibSndFile.samplerate(data))
     # Convert to vector (mono)
     samples = Float64.(data[:, 1])

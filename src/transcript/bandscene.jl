@@ -88,14 +88,21 @@ function BandScene(rng::AbstractRNG;
               density, collision_p, stations)
 end
 
+# Contest: BeginnerOp (12 WPM) rare; faster styles more likely. Weights need not sum to 1.
+const CONTEST_STYLE_POOL = AbstractOperatorStyle[
+    FastContestOp(), MidSkillContestOp(), QRPOperator(), BeginnerOp()
+]
+const CONTEST_STYLE_WEIGHTS = [3.0, 3.0, 2.0, 0.5]  # BeginnerOp ~6%
+
 """
     select_styles(rng, mode, n) -> Vector{AbstractOperatorStyle}
 
 Select operator styles appropriate for the conversation mode.
+Contest mode uses weighted sampling so BeginnerOp is possible but infrequent.
 """
 function select_styles(rng::AbstractRNG, ::ContestMode, n::Int)
-    pool = [FastContestOp(), MidSkillContestOp(), QRPOperator(), BeginnerOp()]
-    return [pool[rand(rng, 1:length(pool))] for _ in 1:n]
+    dist = Categorical(CONTEST_STYLE_WEIGHTS ./ sum(CONTEST_STYLE_WEIGHTS))
+    return [CONTEST_STYLE_POOL[rand(rng, dist)] for _ in 1:n]
 end
 
 function select_styles(rng::AbstractRNG, ::RagchewMode, n::Int)
