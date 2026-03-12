@@ -77,13 +77,10 @@ Generate a single training sample.
 function generate_sample(rng::AbstractRNG, config::DatasetConfig)
     n_stations = rand(rng, config.num_stations_range)
 
-    # Generate transcript
-    transcript = generate_transcript(rng; num_stations=n_stations)
-
-    # Generate scene for signal parameters
+    # One scene: transcript and spectrogram must use the same stations/callsigns
     scene = BandScene(rng; num_stations=n_stations)
+    transcript = generate_transcript(rng, scene)
 
-    # Generate spectrogram
     result = _generate_spec(config.path, rng, transcript, scene, config)
 
     metadata = Dict{String,Any}(
@@ -144,8 +141,8 @@ Always uses AudioPath regardless of config.
 """
 function generate_sample_with_audio(rng::AbstractRNG, config::DatasetConfig)
     n_stations = rand(rng, config.num_stations_range)
-    transcript = generate_transcript(rng; num_stations=n_stations)
     scene = BandScene(rng; num_stations=n_stations)
+    transcript = generate_transcript(rng, scene)
 
     result, mixed = generate_spectrogram(AudioPath(), rng, transcript, scene;
         sample_rate=config.sample_rate,
