@@ -65,6 +65,12 @@ function generate_spectrogram(::AudioPath, rng::AbstractRNG,
     # Apply mel filterbank
     mel_spec = apply_filterbank(filterbank, pspec)
 
+    # Normalize peak (match direct path so both outputs on same scale)
+    peak = maximum(mel_spec)
+    if peak > 0
+        mel_spec ./= peak
+    end
+
     # Log compression
     mel_spec = log10.(max.(mel_spec, 1e-10))
 

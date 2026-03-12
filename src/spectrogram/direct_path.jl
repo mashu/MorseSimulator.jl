@@ -19,13 +19,13 @@ struct DirectPath <: AbstractSpectrogramPath end
 """
     generate_spectrogram(::DirectPath, rng, transcript, scene; kwargs...) -> SpectrogramResult
 
-Generate mel-spectrogram analytically.
-Models the STFT of a windowed sinusoid modulated by the Morse envelope.
+Generate mel-spectrogram analytically (same scene/transcript → statistically similar to audio path).
 
-For a CW tone at frequency f with envelope A(t):
-  Power at mel bin m ≈ A²(t_frame) × H_m(f)²
-
-where H_m(f) is the mel filter weight at the tone frequency.
+**Matches audio path:** Path loss (encoder), per-station and global fading (fade_factor_at_time),
+noise floor and impulsive bursts (add_noise_to_mel! with frame-varying Gaussian), peak norm then log.
+**Approximations:** Envelope sampled at frame centers (not every sample); Gaussian noise uses one
+random scale per frame (real STFT has per-bin randomness); impulsive is frame-level (exact sample
+index lost). Same RNG gives different realizations; distributions are aligned.
 """
 function generate_spectrogram(::DirectPath, rng::AbstractRNG,
                                transcript::Transcript, scene::BandScene;
@@ -91,13 +91,7 @@ function generate_spectrogram(::DirectPath, rng::AbstractRNG,
         end
     end
 
-    # Noise: constant power from all models (Gaussian contributes; Impulsive 0)
-    constant_power = sum(nm -> constant_noise_power(nm), channel.noise_models) * win_energy
-    for j in 1:n_frames
-        @inbounds for m in 1:filterbank.n_filters
-            mel_spec[m, j] += constant_power
-        end
-    end
+    # Noise (dispatch: Gaussian = frame-varying power; Impulsive = random burst frames)
     for nm in channel.noise_models
         add_noise_to_mel!(rng, mel_spec, nm, win_energy, stft_config.hop_size)
     end
@@ -182,13 +176,33 @@ function envelope_at_frames(events::Vector{TimedMorseEvent{Float64}},
 end
 
 # ============================================================================
-# Noise applied to mel (dispatch: Gaussian already in constant; Impulsive adds bursts)
+# Noise applied to mel (dispatch: Gaussian = frame-varying; Impulsive = burst frames)
 # ============================================================================
 
-"""Gaussian: constant already added to all frames; no per-frame add."""
-add_noise_to_mel!(::AbstractRNG, ::AbstractMatrix, ::GaussianNoise, _, _) = nothing
+"""
+Gaussian: add noise power per frame with random scale so frame-to-frame variance
+matches STFT of AWGN (magnitude² per bin has mean σ², variance 2σ⁴).
+"""
+function add_noise_to_mel!(rng::AbstractRNG, mel_spec::AbstractMatrix{Float64},
+                           nm::GaussianNoise{T}, win_energy::Float64, hop_size::Int) where T
+    base_power = Float64(nm.amplitude^2) * win_energy
+    n_frames = size(mel_spec, 2)
+    n_filters = size(mel_spec, 1)
+    for j in 1:n_frames
+        # Scale so E[power]=base_power, Var matches squared Gaussian (chi-squared–like)
+        scale = max(0.2, 1.0 + sqrt(2.0) * randn(rng))
+        frame_power = base_power * scale
+        @inbounds for m in 1:n_filters
+            mel_spec[m, j] += frame_power
+        end
+    end
+    return nothing
+end
 
-"""Impulsive: add random burst power per frame (P(impulse in frame) from per-sample prob)."""
+"""
+Impulsive: add burst power in random frames. P(impulse in frame) from per-sample
+probability; flat across mel bins (impulse in time ≈ flat spectrum).
+"""
 function add_noise_to_mel!(rng::AbstractRNG, mel_spec::AbstractMatrix{Float64},
                            imp::ImpulsiveNoise{T}, win_energy::Float64, hop_size::Int) where T
     n_frames = size(mel_spec, 2)
