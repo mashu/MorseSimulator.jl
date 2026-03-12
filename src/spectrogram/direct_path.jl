@@ -49,28 +49,21 @@ function generate_spectrogram(::DirectPath, rng::AbstractRNG,
     # Precompute window energy for normalization
     win_energy = sum(abs2, stft_config.window) / stft_config.fft_size
 
-    # Channel configuration for noise floor
     channel = ChannelConfig(rng, scene)
-    noise_power = zero(Float64)
-    for nm in channel.noise_models
-        noise_power += _noise_power(nm)
-    end
+    frame_times = [(j - 1) * stft_config.hop_size / sample_rate for j in 1:n_frames]
 
     # For each station, compute analytic contribution
     for se in scene_events.station_events
-        # Generate envelope at frame rate
-        frame_times = [(j - 1) * stft_config.hop_size / sample_rate for j in 1:n_frames]
-        frame_amplitudes = _envelope_at_frames(se.events, frame_times, envelope_type)
+        frame_amplitudes = envelope_at_frames(se.events, frame_times, envelope_type)
 
-        # Apply QSB fading analytically
+        # Per-station QSB fading (same as mixer)
         prop = scene.propagation
         if rand(rng) < prop.qsb_probability
             f_qsb = prop.qsb_freq_range[1] + rand(rng) * (prop.qsb_freq_range[2] - prop.qsb_freq_range[1])
             depth = clamp(prop.qsb_depth_mean + randn(rng) * 0.1, 0.0, 0.95)
-            phase = rand(rng) * 2π
+            fading = SinusoidalFading(Float64(depth), f_qsb, Float64(rand(rng) * 2π))
             for j in 1:n_frames
-                fade = 1.0 - depth * 0.5 * (1.0 + sin(2π * f_qsb * frame_times[j] + phase))
-                frame_amplitudes[j] *= fade
+                frame_amplitudes[j] *= fade_factor_at_time(fading, frame_times[j])
             end
         end
 
@@ -88,11 +81,25 @@ function generate_spectrogram(::DirectPath, rng::AbstractRNG,
         end
     end
 
-    # Add noise floor
+    # Global fading then noise (same order as apply_channel!)
+    for fading in channel.fading_models
+        for j in 1:n_frames
+            fac = fade_factor_at_time(fading, frame_times[j])
+            @inbounds for m in 1:filterbank.n_filters
+                mel_spec[m, j] *= fac
+            end
+        end
+    end
+
+    # Noise: constant power from all models (Gaussian contributes; Impulsive 0)
+    constant_power = sum(nm -> constant_noise_power(nm), channel.noise_models) * win_energy
     for j in 1:n_frames
         @inbounds for m in 1:filterbank.n_filters
-            mel_spec[m, j] += noise_power * win_energy
+            mel_spec[m, j] += constant_power
         end
+    end
+    for nm in channel.noise_models
+        add_noise_to_mel!(rng, mel_spec, nm, win_energy, stft_config.hop_size)
     end
 
     # Normalize peak (approximate match to audio path)
@@ -111,15 +118,15 @@ function generate_spectrogram(::DirectPath, rng::AbstractRNG,
 end
 
 # ============================================================================
-# Helper: Envelope at Frame Times
+# Envelope at frame times (dispatch on envelope type)
 # ============================================================================
 
 """
-    _envelope_at_frames(events, frame_times, envelope_type) -> Vector{Float64}
+    envelope_at_frames(events, frame_times, envelope_type) -> Vector{Float64}
 
 Compute envelope amplitude at each frame center time.
 """
-function _envelope_at_frames(events::Vector{TimedMorseEvent{Float64}},
+function envelope_at_frames(events::Vector{TimedMorseEvent{Float64}},
                               frame_times::Vector{Float64},
                               env::RaisedCosineEnvelope{Float64})
     n_frames = length(frame_times)
@@ -152,9 +159,9 @@ function _envelope_at_frames(events::Vector{TimedMorseEvent{Float64}},
     return amplitudes
 end
 
-function _envelope_at_frames(events::Vector{TimedMorseEvent{Float64}},
-                              frame_times::Vector{Float64},
-                              ::HardEnvelope{Float64})
+function envelope_at_frames(events::Vector{TimedMorseEvent{Float64}},
+                             frame_times::Vector{Float64},
+                             ::HardEnvelope{Float64})
     n_frames = length(frame_times)
     amplitudes = zeros(Float64, n_frames)
 
@@ -175,8 +182,25 @@ function _envelope_at_frames(events::Vector{TimedMorseEvent{Float64}},
 end
 
 # ============================================================================
-# Helper: Noise Power
+# Noise applied to mel (dispatch: Gaussian already in constant; Impulsive adds bursts)
 # ============================================================================
 
-_noise_power(noise::GaussianNoise{T}) where T = noise.amplitude^2
-_noise_power(noise::ImpulsiveNoise{T}) where T = noise.probability * noise.amplitude^2
+"""Gaussian: constant already added to all frames; no per-frame add."""
+add_noise_to_mel!(::AbstractRNG, ::AbstractMatrix, ::GaussianNoise, _, _) = nothing
+
+"""Impulsive: add random burst power per frame (P(impulse in frame) from per-sample prob)."""
+function add_noise_to_mel!(rng::AbstractRNG, mel_spec::AbstractMatrix{Float64},
+                           imp::ImpulsiveNoise{T}, win_energy::Float64, hop_size::Int) where T
+    n_frames = size(mel_spec, 2)
+    n_filters = size(mel_spec, 1)
+    frame_imp_prob = 1.0 - (1.0 - Float64(imp.probability))^hop_size
+    imp_power = Float64(imp.amplitude^2) * win_energy
+    for j in 1:n_frames
+        if rand(rng) < frame_imp_prob
+            @inbounds for m in 1:n_filters
+                mel_spec[m, j] += imp_power
+            end
+        end
+    end
+    return nothing
+end

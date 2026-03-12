@@ -66,6 +66,16 @@ function apply_noise!(rng::AbstractRNG, signal::Vector{T},
     return signal
 end
 
+"""
+    constant_noise_power(nm) -> Float64
+
+Noise power (amplitude²) that is constant in time. Gaussian: amp²; Impulsive: 0
+(impulses are applied per-frame in mel path). Used by direct path to avoid
+duplicating noise model logic.
+"""
+constant_noise_power(nm::GaussianNoise{T}) where T = Float64(nm.amplitude^2)
+constant_noise_power(nm::ImpulsiveNoise{T}) where T = zero(Float64)
+
 # ============================================================================
 # Fading Models (QSB)
 # ============================================================================
@@ -101,45 +111,51 @@ struct RayleighFading{T<:AbstractFloat} <: AbstractFadingModel{T}
 end
 
 """
-    apply_fading!(signal, fading::SinusoidalFading, sample_rate)
+    fade_factor_at_time(fading, t) -> Float64
 
-Apply sinusoidal fading to signal in-place.
+Fade multiplier at time t (seconds). Single source of truth for both
+waveform (apply_fading!) and direct mel path.
+"""
+function fade_factor_at_time(fading::SinusoidalFading{T}, t::Real) where T
+    phase = fading.phase + T(2π) * fading.frequency * T(t)
+    return Float64(one(T) - fading.depth * T(0.5) * (one(T) + sin(phase)))
+end
+
+function fade_factor_at_time(fading::RayleighFading{T}, t::Real) where T
+    n_paths = 8
+    freqs = range(-fading.bandwidth, fading.bandwidth, length=n_paths)
+    phases = range(zero(T), T(2π), length=n_paths + 1)[1:end-1]
+    re = zero(Float64)
+    im = zero(Float64)
+    t_ = Float64(t)
+    for k in 1:n_paths
+        angle = 2π * freqs[k] * t_ + Float64(phases[k])
+        re += cos(angle)
+        im += sin(angle)
+    end
+    mag = sqrt(re^2 + im^2) / n_paths
+    return Float64(max(0.0, one(T) - fading.depth * (one(T) - T(mag))))
+end
+
+"""
+    apply_fading!(signal, fading, sample_rate)
+
+Apply fading to signal in-place (uses fade_factor_at_time per sample).
 """
 function apply_fading!(signal::Vector{T}, fading::SinusoidalFading{T},
                        sample_rate::Int) where T<:AbstractFloat
-    phase_inc = T(2π) * fading.frequency / T(sample_rate)
-    phase = fading.phase
     @inbounds for i in eachindex(signal)
-        fade_factor = one(T) - fading.depth * T(0.5) * (one(T) + sin(phase))
-        signal[i] *= fade_factor
-        phase += phase_inc
+        t = (i - 1) / sample_rate
+        signal[i] *= T(fade_factor_at_time(fading, t))
     end
     return signal
 end
 
-"""
-    apply_fading!(signal, fading::RayleighFading, sample_rate)
-
-Apply Rayleigh-like fading using sum of sinusoids approximation.
-"""
 function apply_fading!(signal::Vector{T}, fading::RayleighFading{T},
                        sample_rate::Int) where T<:AbstractFloat
-    n_paths = 8
-    freqs = range(-fading.bandwidth, fading.bandwidth, length=n_paths)
-    phases = range(zero(T), T(2π), length=n_paths+1)[1:end-1]
-
     @inbounds for i in eachindex(signal)
-        t = T(i - 1) / T(sample_rate)
-        re = zero(T)
-        im = zero(T)
-        for k in 1:n_paths
-            angle = T(2π) * freqs[k] * t + phases[k]
-            re += cos(angle)
-            im += sin(angle)
-        end
-        mag = sqrt(re^2 + im^2) / T(n_paths)
-        fade_factor = one(T) - fading.depth * (one(T) - mag)
-        signal[i] *= max(zero(T), fade_factor)
+        t = (i - 1) / sample_rate
+        signal[i] *= T(fade_factor_at_time(fading, t))
     end
     return signal
 end

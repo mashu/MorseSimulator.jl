@@ -71,12 +71,13 @@ function encode_transcript(rng::AbstractRNG, transcript::Transcript, scene::Band
         end
     end
 
-    # Build StationMorseEvents
+    # Build StationMorseEvents (use received amplitude with path loss so both audio and direct path match)
     all_station_events = StationMorseEvents{Float64}[]
     for (call, events) in station_events_map
         station = station_lookup[call]
+        received_amplitude = signal_strength(rng, scene, station)
         push!(all_station_events, StationMorseEvents{Float64}(
-            call, events, station.tone_freq, station.signal_amplitude
+            call, events, station.tone_freq, received_amplitude
         ))
     end
 
