@@ -77,13 +77,14 @@ function generate_conversation(rng::AbstractRNG, scene::BandScene, ::ContestMode
         push!(txs, Transmission(runner.callsign, cq_text, t, dur, wpm_r, sig_r))
         t += dur + rand(rng, Uniform(0.3, 1.5))
 
-        # Caller responds
+        # Caller responds (may overlap slightly with end of CQ)
+        t_resp = maybe_overlap_start(rng, t, txs)
         resp_text = generate_response(rng, caller, runner.callsign, caller.style)
         resp_text = maybe_insert_error(rng, resp_text, caller.style)
         wpm_c = instantaneous_wpm(rng, caller)
         dur = estimate_duration(resp_text, wpm_c)
         sig_c = signal_strength(rng, scene, caller)
-        push!(txs, Transmission(caller.callsign, resp_text, t, dur, wpm_c, sig_c))
+        push!(txs, Transmission(caller.callsign, resp_text, t_resp, dur, wpm_c, sig_c))
         t += dur + rand(rng, Uniform(0.2, 1.0))
 
         # Check for collision: additional station might also call
@@ -119,13 +120,14 @@ function generate_conversation(rng::AbstractRNG, scene::BandScene, ::ContestMode
             t += estimate_duration(exch_phrase, wpm_r) + rand(rng, Uniform(0.2, 0.8))
         end
 
-        # Caller sends exchange
+        # Caller sends exchange (may overlap slightly with runner's turn)
+        t_exch = maybe_overlap_start(rng, t, txs)
         exch_data_c = generate_exchange(scene.contest, rng, serial_c)
         exch_text_c = format_exchange(scene.contest, exch_data_c)
         exch_phrase_c = generate_exchange_phrase(rng, caller, runner.callsign, exch_text_c, caller.style)
         exch_phrase_c = maybe_insert_error(rng, exch_phrase_c, caller.style)
         dur = estimate_duration(exch_phrase_c, wpm_c)
-        push!(txs, Transmission(caller.callsign, exch_phrase_c, t, dur, wpm_c, sig_c))
+        push!(txs, Transmission(caller.callsign, exch_phrase_c, t_exch, dur, wpm_c, sig_c))
         t += dur + rand(rng, Uniform(0.2, 0.8))
 
         # Runner confirms
@@ -135,7 +137,7 @@ function generate_conversation(rng::AbstractRNG, scene::BandScene, ::ContestMode
         t += dur + rand(rng, Uniform(0.3, 1.5))
     end
 
-    label = build_label(txs)
+    label = build_label(txs, scene)
     return Transcript(txs, label, mode_name(ContestMode()), contest_name(scene.contest))
 end
 
@@ -162,10 +164,11 @@ function generate_conversation(rng::AbstractRNG, scene::BandScene, ::RagchewMode
     push!(txs, Transmission(s1.callsign, cq, t, dur, wpm1, sig1))
     t += dur + rand(rng, Uniform(0.5, 2.0))
 
-    # S2 responds
+    # S2 responds (may overlap slightly with end of CQ)
+    t_resp = maybe_overlap_start(rng, t, txs)
     resp = generate_response(rng, s2, s1.callsign, s2.style)
     dur = estimate_duration(resp, wpm2)
-    push!(txs, Transmission(s2.callsign, resp, t, dur, wpm2, sig2))
+    push!(txs, Transmission(s2.callsign, resp, t_resp, dur, wpm2, sig2))
     t += dur + rand(rng, Uniform(0.5, 1.5))
 
     # S1 sends RST and extras
@@ -180,7 +183,8 @@ function generate_conversation(rng::AbstractRNG, scene::BandScene, ::RagchewMode
     push!(txs, Transmission(s1.callsign, full_text, t, dur, wpm1, sig1))
     t += dur + rand(rng, Uniform(1.0, 3.0))
 
-    # S2 responds with RST and extras
+    # S2 responds with RST and extras (may overlap slightly)
+    t_s2 = maybe_overlap_start(rng, t, txs)
     exch2 = generate_exchange(scene.contest, rng, advance_serial!(s2))
     exch_text2 = format_exchange(scene.contest, exch2)
     greeting2 = rand(rng, ["R", "R R", "FB"])
@@ -189,7 +193,7 @@ function generate_conversation(rng::AbstractRNG, scene::BandScene, ::RagchewMode
     full_text2 = isempty(extras2) ? "$base2 BK" : "$base2 $(join(extras2, " ")) BK"
     full_text2 = maybe_insert_error(rng, full_text2, s2.style)
     dur = estimate_duration(full_text2, wpm2)
-    push!(txs, Transmission(s2.callsign, full_text2, t, dur, wpm2, sig2))
+    push!(txs, Transmission(s2.callsign, full_text2, t_s2, dur, wpm2, sig2))
     t += dur + rand(rng, Uniform(1.0, 3.0))
 
     # S1 closing
@@ -203,7 +207,7 @@ function generate_conversation(rng::AbstractRNG, scene::BandScene, ::RagchewMode
     dur = estimate_duration(closing2, wpm2)
     push!(txs, Transmission(s2.callsign, closing2, t, dur, wpm2, sig2))
 
-    label = build_label(txs)
+    label = build_label(txs, scene)
     return Transcript(txs, label, mode_name(RagchewMode()), contest_name(scene.contest))
 end
 
@@ -257,12 +261,13 @@ function generate_conversation(rng::AbstractRNG, scene::BandScene, ::DXPileupMod
     push!(txs, Transmission(dx.callsign, dx_resp, t, dur, wpm_dx, sig_dx))
     t += dur + rand(rng, Uniform(0.3, 1.0))
 
-    # Picked station sends exchange
+    # Picked station sends exchange (may overlap slightly with DX)
+    t_picked = maybe_overlap_start(rng, t, txs)
     exch_data_p = generate_exchange(scene.contest, rng, advance_serial!(picked))
     exch_text_p = format_exchange(scene.contest, exch_data_p)
     picked_exch = generate_exchange_phrase(rng, picked, dx.callsign, exch_text_p, picked.style)
     dur = estimate_duration(picked_exch, wpm_p)
-    push!(txs, Transmission(picked.callsign, picked_exch, t, dur, wpm_p, sig_p))
+    push!(txs, Transmission(picked.callsign, picked_exch, t_picked, dur, wpm_p, sig_p))
     t += dur + rand(rng, Uniform(0.2, 0.6))
 
     # DX confirms and calls next
@@ -273,7 +278,7 @@ function generate_conversation(rng::AbstractRNG, scene::BandScene, ::DXPileupMod
     # Sort transmissions by time
     sort!(txs, by = tx -> tx.time_offset)
 
-    label = build_label(txs)
+    label = build_label(txs, scene)
     return Transcript(txs, label, mode_name(DXPileupMode()), contest_name(scene.contest))
 end
 
@@ -304,7 +309,7 @@ function generate_conversation(rng::AbstractRNG, scene::BandScene, ::TestMode)
     dur = estimate_duration(text, wpm)
     push!(txs, Transmission(s1.callsign, text, t, dur, wpm, sig))
 
-    label = build_label(txs)
+    label = build_label(txs, scene)
     return Transcript(txs, label, mode_name(TestMode()), contest_name(scene.contest))
 end
 
@@ -312,15 +317,50 @@ end
 # Label Builder
 # ============================================================================
 
-"""
-    build_label(txs) -> String
+const MAX_STATION_TOKEN = 6
 
-Build the flat training label from transmissions.
-Format: <START> text text text <END>
+# Probability and fraction for responder overlapping slightly with previous speaker
+const RESPONDER_OVERLAP_PROB = 0.15
+const RESPONDER_OVERLAP_FRACTION = (0.05, 0.25)
+
 """
-function build_label(txs::Vector{Transmission})
+    maybe_overlap_start(rng, t, txs; overlap_prob, overlap_fraction) -> Float64
+
+With overlap_prob probability, return a start time slightly before the previous
+transmission ended (simulating responder jumping in early). Otherwise return t.
+"""
+function maybe_overlap_start(rng::AbstractRNG, t::Float64, txs::Vector{Transmission};
+                             overlap_prob::Float64 = RESPONDER_OVERLAP_PROB,
+                             overlap_fraction::Tuple{Float64,Float64} = RESPONDER_OVERLAP_FRACTION)
+    if !(rand(rng) < overlap_prob && !isempty(txs))
+        return t
+    end
+    prev = txs[end]
+    prev_end = prev.time_offset + prev.duration_estimate
+    amt = rand(rng, Uniform(overlap_fraction[1], overlap_fraction[2])) * prev.duration_estimate
+    return prev_end - amt
+end
+
+"""
+    build_label(txs, scene) -> String
+
+Build the training label from transmissions in interleaved (time) order.
+Uses [S1]..[S6] for speaker and [TS]/[TE] for turn boundaries to help
+encoder-decoder alignment (e.g. Whisper-like models).
+
+Format: `<START> [TS] [S1] text [TE] [TS] [S2] text [TE] ... <END>`
+"""
+function build_label(txs::Vector{Transmission}, scene::BandScene)
     sorted = sort(txs, by = tx -> tx.time_offset)
-    parts = [tx.text for tx in sorted]
+    callsign_to_index = Dict(s.callsign => min(i, MAX_STATION_TOKEN) for (i, s) in enumerate(scene.stations))
+    parts = String[]
+    for tx in sorted
+        idx = get(callsign_to_index, tx.callsign, 1)
+        push!(parts, "[TS]")
+        push!(parts, "[S$idx]")
+        push!(parts, tx.text)
+        push!(parts, "[TE]")
+    end
     return "<START> " * join(parts, " ") * " <END>"
 end
 

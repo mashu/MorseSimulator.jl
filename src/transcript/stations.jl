@@ -38,13 +38,46 @@ mutable struct Station{S<:AbstractOperatorStyle}
     qth::String
 end
 
+# Responders: 0–350 Hz from caller; same-tone possible; offset distribution biases toward smaller.
+const TONE_OFFSET_MAX = 350.0             # max offset magnitude (Hz) from caller
+const TONE_OFFSET_MIN = 10.0              # min nonzero offset so stations stay distinguishable
+const TONE_BAND = (400.0, 900.0)          # Hz (full band for mel; callers sit in 400–700)
+const TONE_SAME_AS_CALLER_PROB = 0.15     # probability a responder uses caller's tone exactly
+# Offset magnitude bias: use power law so smaller offsets (closer to caller) more likely
+const TONE_OFFSET_POWER = 1.5             # magnitude = MIN + (MAX-MIN) * rand()^POWER
+
 """
-    Station(rng, callsign, style) -> Station
+    Station(rng, callsign, style; ref_freq=nothing, is_caller=false) -> Station
 
 Construct a station with random signal characteristics.
+
+If `ref_freq` is set, the station's tone is relative to the caller:
+- Caller (`is_caller=true`): uses `ref_freq` exactly.
+- Others: with probability `TONE_SAME_AS_CALLER_PROB` use same tone; otherwise
+  `ref_freq` ± offset with magnitude in [TONE_OFFSET_MIN, TONE_OFFSET_MAX] (10–350 Hz),
+  with a probabilistic distribution that favors smaller offsets. Clamped to `TONE_BAND`.
+If `ref_freq` is not set, tone is uniform in 400–900 Hz (legacy behavior).
 """
-function Station(rng::AbstractRNG, callsign::String, style::S) where {S<:AbstractOperatorStyle}
-    tone = 400.0 + rand(rng) * 500.0  # 400-900 Hz
+function Station(rng::AbstractRNG, callsign::String, style::S;
+                 ref_freq::Union{Float64,Nothing} = nothing,
+                 is_caller::Bool = false) where {S<:AbstractOperatorStyle}
+    tone = if ref_freq !== nothing
+        if is_caller
+            Float64(ref_freq)
+        else
+            if rand(rng) < TONE_SAME_AS_CALLER_PROB
+                Float64(ref_freq)
+            else
+                # 0–350 Hz from caller; bias toward smaller offset (rand^power)
+                span = TONE_OFFSET_MAX - TONE_OFFSET_MIN
+                magnitude = TONE_OFFSET_MIN + span * Float64(rand(rng))^TONE_OFFSET_POWER
+                offset = magnitude * (rand(rng, Bool) ? 1.0 : -1.0)
+                clamp(ref_freq + offset, TONE_BAND[1], TONE_BAND[2])
+            end
+        end
+    else
+        400.0 + rand(rng) * (TONE_BAND[2] - TONE_BAND[1])
+    end
     amp = exp(randn(rng) * 0.5)       # LogNormal amplitude
     name = random_op_name(rng)
     qth = random_qth(rng)

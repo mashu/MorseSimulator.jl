@@ -39,7 +39,6 @@ function mix_signals(rng::AbstractRNG,
     n_samples = round(Int, scene_events.total_duration * sample_rate)
     mixed = zeros(T, n_samples)
 
-    # Generate per-station fading
     channel = ChannelConfig(rng, scene)
 
     for se in scene_events.station_events
@@ -62,7 +61,6 @@ function mix_signals(rng::AbstractRNG,
         end
     end
 
-    # Apply channel noise
     apply_channel!(rng, mixed, channel, sample_rate)
 
     # Normalize to prevent clipping

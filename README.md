@@ -19,8 +19,8 @@ Conversation Layer → Text Layer → Morse Timing Layer → Signal Layer → Sp
 │  Modes: Contest | Ragchew | DX Pileup | Test                       │
 ├─────────────────────────────────────────────────────────────────────┤
 │ Text Layer                                                          │
-│  Transcript → "<START> CQ CQ DE SO5KM ... <END>"                   │
-│  Labels for neural network training                                 │
+│  Transcript → "<START> [TS] [S1] CQ CQ [TE] [TS] [S2] ... <END>"   │
+│  [S1]..[S6] speaker; [TS]/[TE] turn boundaries for alignment       │
 ├─────────────────────────────────────────────────────────────────────┤
 │ Morse Timing Layer                                                  │
 │  Text → TimedMorseEvents (dots, dashes, gaps with jitter)           │
@@ -60,9 +60,9 @@ plot_transcript(transcript)
 # Batch generation
 transcripts = generate_transcripts(rng, 100)
 
-# Inspect the training label
+# Inspect the training label ([S1]..[S6] separate speakers in time order)
 println(flat_text(transcript))
-# <START> CQ CQ SO5KM SO5KM DE DL3AB 5NN 001 TU DL3AB 5NN 002 TU SO5KM <END>
+# <START> [S1] CQ CQ SO5KM [S2] DL3AB 5NN 001 [S1] TU ... <END>
 
 # Annotated text with TX markers
 println(annotated_text(transcript))
@@ -97,6 +97,12 @@ spec_direct = generate_spectrogram(DirectPath(), rng, transcript, scene)
 report = compare_paths(spec_audio, spec_direct)
 plot_consistency(report)
 ```
+
+## Label Tokens and Overlap
+
+- **Training label**: `<START>`, `<END>`, station tokens `[S1]`..`[S6]`, and turn boundaries `[TS]` / `[TE]` (transmission start/end) to help encoder-decoder alignment. No `TX_START`/`TX_END` in the label.
+- **`annotated_text(transcript)`** returns a debug string with `<TX_START:callsign>` / `<TX_END>` for inspection.
+- **Responder overlap**: With ~15% probability a responder’s transmission starts slightly before the previous speaker finishes (5–25% of the previous duration).
 
 ## Design Principles
 
@@ -211,12 +217,18 @@ MorseSimulator.jl/
 
 ## Signal Parameters
 
-- **CW tone**: 400–900 Hz (configurable per station)
+- **CW tone**: Caller 400–700 Hz (mean ~600); others 0–350 Hz offset (probabilistic, biased toward smaller); mel band 200–900 Hz for full range
 - **Noise**: Gaussian + optional impulsive (QRN)
 - **Fading**: Sinusoidal QSB (0.1–1 Hz) or Rayleigh
-- **Frequency offset**: per-station offset ~Normal(0, 5 Hz)
+- **Frequency offset**: per-station offset 0–350 Hz from caller (probabilistic)
 - **Mel spectrogram range**: 200–900 Hz (40 mel bins default)
 - **Audio format**: PCM 16-bit, 44100 Hz, Mono
+
+## How we vary amplitude, SNR, and WPM
+
+- **Amplitude**: Each station gets `signal_amplitude ~ LogNormal` (in `Station`); path loss varies per station via propagation, so received levels differ. Relative levels are preserved when mixing; normalization only sets overall scale.
+- **SNR (realistic model)**: Noise is **band noise** from the scene’s `noise_floor_db` (drawn per scene, e.g. −28 to −12 dB). Signal levels vary by station and path loss. So **SNR emerges** from “fixed” band noise + variable signals (correct causal model). Widening the noise-floor range gives a wide spread of SNRs across samples without retrofitting noise to a target SNR.
+- **WPM**: Per transmission we sample `instantaneous_wpm(rng, station)` from Normal(mean_wpm(style), wpm_sigma(style)); within a transmission, WPM drifts (see `text_to_timed_events`). So speed varies by operator style, by transmission, and within a transmission.
 
 ## Dependencies
 

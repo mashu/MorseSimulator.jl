@@ -65,6 +65,10 @@ const RNG = MersenneTwister(12345)
             @test startswith(transcript.label, "<START>")
             @test endswith(transcript.label, "<END>")
             @test length(transcript.mode_name) > 0
+            # Labels use [S1]..[S6], [TS]/[TE] for turn boundaries
+            @test occursin(r"\[S[1-6]\]", transcript.label)
+            @test occursin("[TS]", transcript.label)
+            @test occursin("[TE]", transcript.label)
         end
     end
 

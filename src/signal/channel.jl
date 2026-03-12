@@ -162,35 +162,35 @@ struct ChannelConfig{T<:AbstractFloat}
     fading_models::Vector{<:AbstractFadingModel{T}}
 end
 
+# Target SNR (dB) range when mix_rms is provided: noise is set so mixed signal has this SNR
 """
     ChannelConfig(rng, scene) -> ChannelConfig{Float64}
 
 Create a channel configuration from a band scene's propagation conditions.
+Noise is set from the scene noise floor (band noise); SNR emerges from
+signal levels (station amplitude, path loss).
 """
 function ChannelConfig(rng::AbstractRNG, scene::BandScene)
     prop = scene.propagation
-    T = Float64
+    Tf = Float64
 
-    noise_models = AbstractNoiseModel{T}[]
-    # Gaussian noise based on noise floor
-    noise_amp = T(10.0^(scene.noise_floor_db / 20.0))
-    push!(noise_models, GaussianNoise{T}(noise_amp))
-
-    # Optional impulsive noise
+    noise_models = AbstractNoiseModel{Tf}[]
+    noise_amp = Tf(10.0^(scene.noise_floor_db / 20.0))
+    push!(noise_models, GaussianNoise{Tf}(noise_amp))
     if rand(rng) < 0.3
-        push!(noise_models, ImpulsiveNoise{T}(T(0.0001), noise_amp * T(5.0)))
+        push!(noise_models, ImpulsiveNoise{Tf}(Tf(0.0001), noise_amp * Tf(5.0)))
     end
 
-    fading_models = AbstractFadingModel{T}[]
+    fading_models = AbstractFadingModel{Tf}[]
     if rand(rng) < prop.qsb_probability
         f_qsb = prop.qsb_freq_range[1] + rand(rng) * (prop.qsb_freq_range[2] - prop.qsb_freq_range[1])
         depth = prop.qsb_depth_mean + randn(rng) * 0.1
         depth = clamp(depth, 0.0, 0.95)
-        phase = rand(rng) * T(2π)
-        push!(fading_models, SinusoidalFading{T}(T(depth), T(f_qsb), phase))
+        phase = rand(rng) * Tf(2π)
+        push!(fading_models, SinusoidalFading{Tf}(Tf(depth), Tf(f_qsb), phase))
     end
 
-    return ChannelConfig{T}(noise_models, fading_models)
+    return ChannelConfig{Tf}(noise_models, fading_models)
 end
 
 """

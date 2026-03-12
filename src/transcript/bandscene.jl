@@ -70,11 +70,16 @@ function BandScene(rng::AbstractRNG;
                    contest::AbstractContest = random_contest(rng),
                    mode::AbstractConversationMode = random_mode(rng),
                    propagation::PropagationCondition = moderate_propagation(),
-                   noise_floor_db::Float64 = -20.0 + randn(rng) * 5.0)
+                   noise_floor_db::Float64 = -28.0 + rand(rng) * 16.0)  # -28 to -12 dB; SNR emerges from signal levels
 
     callsigns = generate_callsigns(rng, num_stations)
     styles = select_styles(rng, mode, num_stations)
-    stations = [Station(rng, call, style) for (call, style) in zip(callsigns, styles)]
+    # Caller tone: most operators 400–700 Hz, mean ~600; full 200–900 Hz inspected in mel for outliers
+    ref_freq = clamp(600.0 + 80.0 * randn(rng), 400.0, 700.0)
+    stations = [
+        Station(rng, call, style; ref_freq=ref_freq, is_caller=(i == 1))
+        for (i, (call, style)) in enumerate(zip(callsigns, styles))
+    ]
 
     density = Float64(num_stations)
     collision_p = clamp(0.05 * num_stations, 0.0, 0.6)

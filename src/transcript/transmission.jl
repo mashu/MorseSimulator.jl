@@ -35,7 +35,8 @@ A complete transcript of a simulated CW scene.
 
 # Fields
 - `transmissions::Vector{Transmission}` — ordered list of transmissions
-- `label::String` — plain text label for ML training
+- `label::String` — training label: `<START> [TS] [S1] text [TE] [TS] [S2] ... <END>`
+  with [S1]..[S6], and [TS]/[TE] for turn boundaries (alignment)
 - `mode_name::String` — conversation mode name
 - `contest_name::String` — contest type name
 """
@@ -49,7 +50,8 @@ end
 """
     flat_text(transcript) -> String
 
-Produce the flat text label: <START> ... <END>
+Return the training label: <START> [TS] [S1] text [TE] [TS] [S2] ... <END>
+[S1]..[S6] mark speaker; [TS]/[TE] mark transmission start/end for alignment.
 """
 function flat_text(t::Transcript)
     return t.label
@@ -58,7 +60,8 @@ end
 """
     annotated_text(transcript) -> String
 
-Produce annotated text with TX markers for inspection.
+Produce human-readable annotated text with `<TX_START:callsign>` / `<TX_END>` markers
+for inspection and debugging. Not used in the training label (which uses [S1]..[S6]).
 """
 function annotated_text(t::Transcript)
     parts = String[]

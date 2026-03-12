@@ -281,32 +281,76 @@ end
 # Retry / AGN Phrases
 # ============================================================================
 
+# With this probability, a retry phrase includes a partial callsign (?7NA, NA?, etc.)
+const PARTIAL_CALLSIGN_IN_RETRY_PROB = 0.15
+
+"""
+    partial_callsign_for_retry(rng, callsign) -> String
+
+Generate a partial callsign as used when asking for a repeat (e.g. ?7NA, NA?, 7NA?).
+Natural in AGN/PSE AGN context when the operator didn't copy the full call.
+"""
+function partial_callsign_for_retry(rng::AbstractRNG, callsign::AbstractString)
+    isempty(callsign) && return "?"
+    n = length(callsign)
+    n <= 2 && return callsign * "?"
+    # 2–3 char suffix or prefix with ?; sometimes middle fragment
+    choice = rand(rng, 1:3)
+    if choice == 1
+        # "?7NA" — leading ? + last 2–3 chars
+        len = rand(rng, 2:min(3, n))
+        "?" * callsign[max(1, n - len + 1):end]
+    elseif choice == 2
+        # "NA?" — last 2–3 chars + trailing ?
+        len = rand(rng, 2:min(3, n))
+        callsign[max(1, n - len + 1):end] * "?"
+    else
+        # "7NA?" — suffix with trailing ?
+        len = rand(rng, 2:min(3, n))
+        callsign[max(1, n - len + 1):end] * "?"
+    end
+end
+
+function _maybe_append_partial_retry(rng::AbstractRNG, station::Station, base::String)
+    if rand(rng) < PARTIAL_CALLSIGN_IN_RETRY_PROB && !isempty(station.qso_partner)
+        return base * " " * partial_callsign_for_retry(rng, station.qso_partner)
+    end
+    return base
+end
+
 """
     generate_retry(rng, station, style) -> String
 
-Generate a retry/repeat request.
+Generate a retry/repeat request. With small probability includes a partial
+callsign (?7NA, NA?, etc.) as part of the request.
 """
 function generate_retry(rng::AbstractRNG, station::Station, ::FastContestOp)
-    return rand(rng, ["AGN", "?", "$(station.qso_partner)?"])
+    base = rand(rng, ["AGN", "?", "$(station.qso_partner)?"])
+    return _maybe_append_partial_retry(rng, station, base)
 end
 
 function generate_retry(rng::AbstractRNG, station::Station, ::CasualRagchewer)
-    return rand(rng, ["PSE AGN", "AGN PSE", "QRM PSE RPT", "AGN?", "SRI AGN"])
+    base = rand(rng, ["PSE AGN", "AGN PSE", "QRM PSE RPT", "AGN?", "SRI AGN"])
+    return _maybe_append_partial_retry(rng, station, base)
 end
 
 function generate_retry(rng::AbstractRNG, station::Station, ::BeginnerOp)
-    return rand(rng, ["PSE AGN AGN", "PSE RPT UR RST", "?", "AGN PSE AGN"])
+    base = rand(rng, ["PSE AGN AGN", "PSE RPT UR RST", "?", "AGN PSE AGN"])
+    return _maybe_append_partial_retry(rng, station, base)
 end
 
 function generate_retry(rng::AbstractRNG, station::Station, ::DXPileupManager)
     partial = station.qso_partner[max(1,end-2):end]
-    return rand(rng, ["$(partial)?", "AGN", "?"])
+    base = rand(rng, ["$(partial)?", "AGN", "?"])
+    return _maybe_append_partial_retry(rng, station, base)
 end
 
 function generate_retry(rng::AbstractRNG, station::Station, ::MidSkillContestOp)
-    return rand(rng, ["AGN", "AGN?", "NR AGN", "?"])
+    base = rand(rng, ["AGN", "AGN?", "NR AGN", "?"])
+    return _maybe_append_partial_retry(rng, station, base)
 end
 
 function generate_retry(rng::AbstractRNG, station::Station, ::QRPOperator)
-    return rand(rng, ["PSE AGN", "QRS PSE", "AGN AGN", "RPT PSE"])
+    base = rand(rng, ["PSE AGN", "QRS PSE", "AGN AGN", "RPT PSE"])
+    return _maybe_append_partial_retry(rng, station, base)
 end
