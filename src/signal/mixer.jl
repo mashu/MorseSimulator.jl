@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/signal/mixer.jl
+    MorseSimulator.jl/src/signal/mixer.jl
 
 Multi-station signal mixer. Generates individual station signals
 and sums them linearly, then applies channel effects.

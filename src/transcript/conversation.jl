@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/transcript/conversation.jl
+    MorseSimulator.jl/src/transcript/conversation.jl
 
 Conversation engine generating realistic CW transcripts.
 Uses dispatch on conversation mode to produce different

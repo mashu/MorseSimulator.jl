@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/transcript/stations.jl
+    MorseSimulator.jl/src/transcript/stations.jl
 
 Station model representing an individual amateur radio station
 with callsign, operator style, signal characteristics, and

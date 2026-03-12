@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/transcript/transmission.jl
+    MorseSimulator.jl/src/transcript/transmission.jl
 
 Transmission record type representing a single over-the-air
 transmission by one station. Forms the building blocks of

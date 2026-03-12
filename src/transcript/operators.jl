@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/transcript/operators.jl
+    MorseSimulator.jl/src/transcript/operators.jl
 
 Operator style archetypes and state machine for CW operator behavior.
 Each style controls speed, verbosity, patience, error rates, and

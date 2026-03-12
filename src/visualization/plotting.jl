@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/visualization/plotting.jl
+    MorseSimulator.jl/src/visualization/plotting.jl
 
 Visualization utilities using UnicodePlots for terminal-based
 inspection of transcripts, Morse timing, and mel-spectrograms.

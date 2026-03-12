@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/transcript/contests.jl
+    MorseSimulator.jl/src/transcript/contests.jl
 
 Contest definitions with exchange rules, required fields, and
 phrase generation logic. Each contest type uses dispatch to

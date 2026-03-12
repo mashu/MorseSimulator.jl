@@ -1,4 +1,4 @@
-# CWContestSim.jl
+# MorseSimulator.jl
 
 A Julia package for simulating realistic **CW Morse amateur radio communications** and generating **mel-spectrogram datasets** for training Whisper-like audio-to-text neural networks.
 
@@ -41,7 +41,7 @@ Conversation Layer → Text Layer → Morse Timing Layer → Signal Layer → Sp
 
 ```julia
 using Pkg
-Pkg.develop(path="path/to/CWContestSim.jl")
+Pkg.develop(path="path/to/MorseSimulator.jl")
 ```
 
 ## Quick Start
@@ -49,7 +49,7 @@ Pkg.develop(path="path/to/CWContestSim.jl")
 ### Phase 1: Generate Transcripts
 
 ```julia
-using CWContestSim, Random
+using MorseSimulator, Random
 
 rng = MersenneTwister(42)
 
@@ -147,10 +147,10 @@ transcript = generate_transcript(rng; num_stations=4)
 ## Package Structure
 
 ```
-CWContestSim.jl/
+MorseSimulator.jl/
 ├── Project.toml
 ├── src/
-│   ├── CWContestSim.jl           # Main module
+│   ├── MorseSimulator.jl         # Main module
 │   ├── types.jl                   # Abstract type hierarchy
 │   ├── dataset.jl                 # High-level dataset API
 │   ├── transcript/

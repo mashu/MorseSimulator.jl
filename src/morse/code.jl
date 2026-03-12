@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/morse/code.jl
+    MorseSimulator.jl/src/morse/code.jl
 
 International Morse Code table and character-to-symbol conversion.
 Uses a compile-time constant dictionary for fast lookup.

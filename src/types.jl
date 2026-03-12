@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/types.jl
+    MorseSimulator.jl/src/types.jl
 
 Core abstract type hierarchy for the CW Contest Simulator.
 All concrete types in the package derive from these abstract types,

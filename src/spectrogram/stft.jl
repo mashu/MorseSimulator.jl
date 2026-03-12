@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/spectrogram/stft.jl
+    MorseSimulator.jl/src/spectrogram/stft.jl
 
 Short-Time Fourier Transform computation using FFTW.
 Provides the power spectrogram needed for mel conversion.

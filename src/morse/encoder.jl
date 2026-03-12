@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/morse/encoder.jl
+    MorseSimulator.jl/src/morse/encoder.jl
 
 Encoder converting transcripts to sequences of timed Morse events
 for each station, with proper inter-transmission gaps and

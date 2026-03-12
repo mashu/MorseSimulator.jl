@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/spectrogram/mel.jl
+    MorseSimulator.jl/src/spectrogram/mel.jl
 
 Mel-scale filterbank construction for spectrogram generation.
 Optimized for CW Morse signals (200-900 Hz range).

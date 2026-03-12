@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/signal/channel.jl
+    MorseSimulator.jl/src/signal/channel.jl
 
 Channel model applying realistic propagation effects to CW signals.
 Effects include additive noise, QSB fading, impulsive noise,

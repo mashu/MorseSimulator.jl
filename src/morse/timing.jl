@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/morse/timing.jl
+    MorseSimulator.jl/src/morse/timing.jl
 
 Morse timing model converting WPM to element durations with
 realistic operator jitter and speed variation.

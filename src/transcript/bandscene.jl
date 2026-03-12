@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/transcript/bandscene.jl
+    MorseSimulator.jl/src/transcript/bandscene.jl
 
 Band scene model representing the radio environment in which
 stations operate. Controls propagation, noise, fading, and

@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/spectrogram/direct_path.jl
+    MorseSimulator.jl/src/spectrogram/direct_path.jl
 
 Mode 2: Direct (analytic) mel-spectrogram generation.
 Bypasses audio waveform synthesis for fast dataset production.

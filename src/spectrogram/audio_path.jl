@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/spectrogram/audio_path.jl
+    MorseSimulator.jl/src/spectrogram/audio_path.jl
 
 Mode 1: Audio path for mel-spectrogram generation.
 Morse → waveform → STFT → mel spectrogram.

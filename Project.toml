@@ -18,3 +18,9 @@ FFTW = "1.10.0"
 LibSndFile = "2.4.0"
 Random = "1.11.0"
 UnicodePlots = "3.8.2"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

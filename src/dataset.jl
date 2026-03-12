@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/dataset.jl
+    MorseSimulator.jl/src/dataset.jl
 
 High-level dataset generation API. Produces batches of
 (mel_spectrogram, label) pairs for neural network training.

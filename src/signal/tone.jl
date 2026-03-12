@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/signal/tone.jl
+    MorseSimulator.jl/src/signal/tone.jl
 
 CW tone signal generation. Produces a sine wave at the station's
 tone frequency, modulated by the Morse envelope.

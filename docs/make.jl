@@ -1,8 +1,8 @@
-using Documenter, CWContestSim
+using Documenter, MorseSimulator
 
 makedocs(
-    sitename = "CWContestSim.jl",
-    modules = [CWContestSim],
+    sitename = "MorseSimulator.jl",
+    modules = [MorseSimulator],
     format = Documenter.HTML(prettyurls = false),
     pages = [
         "Home" => "index.md",

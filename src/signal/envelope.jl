@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/signal/envelope.jl
+    MorseSimulator.jl/src/signal/envelope.jl
 
 Morse envelope generation. Creates the amplitude envelope
 for CW tone signals from timed Morse events.

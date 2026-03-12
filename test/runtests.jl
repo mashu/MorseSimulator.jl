@@ -1,5 +1,5 @@
 """
-    CWContestSim/test/runtests.jl
+    MorseSimulator/test/runtests.jl
 
 Test suite covering transcript generation, Morse encoding,
 signal generation, and spectrogram computation.
@@ -7,11 +7,11 @@ signal generation, and spectrogram computation.
 
 using Test
 using Random
-using CWContestSim
+using MorseSimulator
 
 const RNG = MersenneTwister(12345)
 
-@testset "CWContestSim" begin
+@testset "MorseSimulator" begin
 
     @testset "Callsign Generation" begin
         call = generate_callsign(RNG)
@@ -24,7 +24,7 @@ const RNG = MersenneTwister(12345)
     end
 
     @testset "Contest Exchange Generation" begin
-        for contest in CWContestSim.ALL_CONTESTS
+        for contest in ALL_CONTESTS
             exch = generate_exchange(contest, RNG, 1)
             text = format_exchange(contest, exch)
             @test length(text) > 0
@@ -33,7 +33,7 @@ const RNG = MersenneTwister(12345)
     end
 
     @testset "Operator Styles" begin
-        for style in CWContestSim.ALL_STYLES
+        for style in ALL_STYLES
             @test mean_wpm(style) > 0
             @test wpm_sigma(style) >= 0
             @test 0.0 <= verbosity(style) <= 1.0
@@ -106,8 +106,8 @@ const RNG = MersenneTwister(12345)
     end
 
     @testset "Morse Encoding" begin
-        transcript = generate_transcript(RNG; num_stations=2)
         scene = BandScene(RNG; num_stations=2)
+        transcript = generate_transcript(RNG, scene)
         scene_events = encode_transcript(RNG, transcript, scene)
 
         @test length(scene_events.station_events) > 0

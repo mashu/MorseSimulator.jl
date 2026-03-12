@@ -1,4 +1,4 @@
-# CWContestSim.jl
+# MorseSimulator.jl
 
 A Julia package for simulating realistic CW Morse amateur radio communications
 and generating mel-spectrogram datasets for training Whisper-like audio-to-text
@@ -16,7 +16,7 @@ The package provides an end-to-end simulation pipeline:
 ## Quick Start
 
 ```julia
-using CWContestSim, Random
+using MorseSimulator, Random
 
 rng = MersenneTwister(42)
 

@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/signal/audio.jl
+    MorseSimulator.jl/src/signal/audio.jl
 
 Audio file I/O for saving and loading WAV files.
 Supports PCM 16-bit, 44100 Hz, Mono format.

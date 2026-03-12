@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/spectrogram/consistency.jl
+    MorseSimulator.jl/src/spectrogram/consistency.jl
 
 Consistency metrics for comparing mel-spectrograms generated
 via the audio path (Mode 1) and direct path (Mode 2).

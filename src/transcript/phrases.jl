@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/transcript/phrases.jl
+    MorseSimulator.jl/src/transcript/phrases.jl
 
 Phrase template system for generating realistic CW text.
 Templates use dispatch on operator style and conversation mode

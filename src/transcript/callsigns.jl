@@ -1,5 +1,5 @@
 """
-    CWContestSim/src/transcript/callsigns.jl
+    MorseSimulator.jl/src/transcript/callsigns.jl
 
 Realistic amateur radio callsign generation with proper prefix/suffix
 patterns organized by ITU region and country.
