@@ -26,11 +26,11 @@ end
 """
     STFTConfig(; fft_size, hop_size, window_type) -> STFTConfig
 
-Create STFT configuration. Default: Hann window, 1024 FFT, 256 hop.
+Create STFT configuration. Default: Hann window, 1024 FFT, 128 hop (~2.9 ms/frame @ 44.1 kHz).
 """
 function STFTConfig(;
         fft_size::Int = 1024,
-        hop_size::Int = 256,
+        hop_size::Int = 128,
         window_type::Symbol = :hann)
 
     T = Float64

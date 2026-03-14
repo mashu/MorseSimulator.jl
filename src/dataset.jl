@@ -52,7 +52,7 @@ function DatasetConfig(;
         path::AbstractSpectrogramPath = DirectPath(),
         sample_rate::Int = 44100,
         fft_size::Int = 1024,
-        hop_size::Int = 256,
+        hop_size::Int = 128,   # ~2.9 ms/frame @ 44.1 kHz → 4–5+ frames per dot
         n_mels::Int = 40,
         f_min::Float64 = 200.0,
         f_max::Float64 = 900.0,
