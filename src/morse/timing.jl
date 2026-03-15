@@ -49,13 +49,17 @@ end
 
 A Morse element with absolute timing information.
 
+Uses `MorseElement` (a concrete 5-type union: Dot, Dash, SymbolGap, CharGap, WordGap)
+for the element field, enabling Julia's small-union optimization instead of abstract
+type dispatch on every field access.
+
 # Fields
-- `element::AbstractMorseElement` — the Morse element
+- `element::MorseElement` — the Morse element (concrete union)
 - `start_time::T` — start time in seconds
 - `duration::T` — actual duration in seconds (with jitter)
 """
 struct TimedMorseEvent{T<:AbstractFloat}
-    element::AbstractMorseElement
+    element::MorseElement
     start_time::T
     duration::T
 end
