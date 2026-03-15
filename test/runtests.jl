@@ -204,7 +204,7 @@ const RNG = MersenneTwister(12345)
         transcript = generate_transcript(RNG; num_stations=2)
         scene = BandScene(RNG; num_stations=2)
 
-        result, mixed = generate_spectrogram(AudioPath(), RNG, transcript, scene)
+        result, mixed, _ = generate_spectrogram(AudioPath(), RNG, transcript, scene)
         @test size(result.mel_spectrogram, 1) > 0
         @test size(result.mel_spectrogram, 2) > 0
         @test length(result.label) > 0
@@ -215,7 +215,7 @@ const RNG = MersenneTwister(12345)
         transcript = generate_transcript(RNG; num_stations=2)
         scene = BandScene(RNG; num_stations=2)
 
-        result = generate_spectrogram(DirectPath(), RNG, transcript, scene)
+        result, _ = generate_spectrogram(DirectPath(), RNG, transcript, scene)
         @test size(result.mel_spectrogram, 1) > 0
         @test size(result.mel_spectrogram, 2) > 0
         @test length(result.label) > 0
@@ -241,6 +241,7 @@ const RNG = MersenneTwister(12345)
         @test length(sample.label) > 0
         @test haskey(sample.metadata, "mode")
         @test haskey(sample.metadata, "contest")
+        @test (sample.token_timing isa NoTiming) || (length(sample.token_timing.token_start_frames) == length(sample.token_timing.token_end_frames))
 
         samples = generate_dataset(RNG, 3, config)
         @test length(samples) == 3

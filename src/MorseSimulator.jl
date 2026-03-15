@@ -73,6 +73,7 @@ include("transcript/conversation.jl")
 include("morse/code.jl")
 include("morse/timing.jl")
 include("morse/encoder.jl")
+include("alignment.jl")
 
 # ============================================================================
 # Phase 2: Signal Layer
@@ -152,8 +153,9 @@ export SpectrogramResult
 export L2SpectralError, CosineSimilarity, KLDivergence, MeanAbsoluteError
 export ConsistencyReport
 
-# Types — Dataset
+# Types — Dataset & Alignment
 export DatasetSample, DatasetConfig
+export AbstractTokenTiming, TokenTiming, NoTiming
 
 # Functions — Callsigns
 export generate_callsign, generate_callsigns

@@ -105,10 +105,11 @@ function generate_spectrogram(::DirectPath, rng::AbstractRNG,
     # Log compression
     mel_spec = log10.(max.(mel_spec, 1e-10))
 
-    return SpectrogramResult{Float64}(
+    result = SpectrogramResult{Float64}(
         mel_spec, transcript.label, sample_rate,
         total_dur, stft_config, filterbank
     )
+    return result, scene_events
 end
 
 # ============================================================================

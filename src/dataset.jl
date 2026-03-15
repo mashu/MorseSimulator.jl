@@ -16,11 +16,14 @@ A single training sample.
 - `mel_spectrogram::Matrix{T}` — mel spectrogram
 - `label::String` — text label
 - `metadata::Dict{String,Any}` — additional metadata
+- `token_timing::AbstractTokenTiming` — TokenTiming for exact chunk alignment, NoTiming() when
+  alignment unavailable. Enables dispatch in downstream (e.g. MorseDecoder).
 """
 struct DatasetSample{T<:AbstractFloat}
     mel_spectrogram::Matrix{T}
     label::String
     metadata::Dict{String,Any}
+    token_timing::AbstractTokenTiming
 end
 
 """
@@ -96,7 +99,7 @@ end
 
 function generate_sample(rng::AbstractRNG, config::DatasetConfig,
                         transcript::Transcript, scene::BandScene)
-    result = _generate_spec(config.path, rng, transcript, scene, config)
+    result, scene_events = generate_spec_and_events(config.path, rng, transcript, scene, config)
 
     n_stations = length(scene.stations)
     metadata = Dict{String,Any}(
@@ -107,23 +110,30 @@ function generate_sample(rng::AbstractRNG, config::DatasetConfig,
         "sample_rate" => config.sample_rate
     )
 
-    return DatasetSample{Float64}(result.mel_spectrogram, result.label, metadata)
+    n_frames = size(result.mel_spectrogram, 2)
+    hop_size = config.stft_config.hop_size
+    token_timing = compute_token_timing(
+        transcript, scene_events, n_frames, result.duration,
+        config.sample_rate, hop_size,
+    )
+
+    return DatasetSample{Float64}(result.mel_spectrogram, result.label, metadata, token_timing)
 end
 
-# Dispatch helper to handle return types
-function _generate_spec(::DirectPath, rng, transcript, scene, config)
+# Dispatch: return (result, scene_events) for alignment; no leading underscore per style.
+function generate_spec_and_events(::DirectPath, rng, transcript, scene, config)
     generate_spectrogram(DirectPath(), rng, transcript, scene;
         sample_rate=config.sample_rate,
         stft_config=config.stft_config,
         filterbank=config.filterbank)
 end
 
-function _generate_spec(::AudioPath, rng, transcript, scene, config)
-    result, _ = generate_spectrogram(AudioPath(), rng, transcript, scene;
+function generate_spec_and_events(::AudioPath, rng, transcript, scene, config)
+    result, _, scene_events = generate_spectrogram(AudioPath(), rng, transcript, scene;
         sample_rate=config.sample_rate,
         stft_config=config.stft_config,
         filterbank=config.filterbank)
-    return result
+    return result, scene_events
 end
 
 """
@@ -170,7 +180,7 @@ end
 
 function generate_sample_with_audio(rng::AbstractRNG, config::DatasetConfig,
                                    transcript::Transcript, scene::BandScene)
-    result, mixed = generate_spectrogram(AudioPath(), rng, transcript, scene;
+    result, mixed, scene_events = generate_spectrogram(AudioPath(), rng, transcript, scene;
         sample_rate=config.sample_rate,
         stft_config=config.stft_config,
         filterbank=config.filterbank)
@@ -184,7 +194,13 @@ function generate_sample_with_audio(rng::AbstractRNG, config::DatasetConfig,
         "sample_rate" => config.sample_rate
     )
 
-    sample = DatasetSample{Float64}(result.mel_spectrogram, result.label, metadata)
+    n_frames = size(result.mel_spectrogram, 2)
+    hop_size = config.stft_config.hop_size
+    token_timing = compute_token_timing(
+        transcript, scene_events, n_frames, result.duration,
+        config.sample_rate, hop_size,
+    )
+    sample = DatasetSample{Float64}(result.mel_spectrogram, result.label, metadata, token_timing)
     return sample, mixed
 end
 

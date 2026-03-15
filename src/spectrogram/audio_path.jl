@@ -49,7 +49,7 @@ function generate_spectrogram(::AudioPath, rng::AbstractRNG,
                                    fft_size=stft_config.fft_size, sample_rate=sample_rate),
                                envelope_type::AbstractEnvelope{Float64} = RaisedCosineEnvelope())
 
-    # Encode transcript to Morse events
+    # Encode transcript to Morse events (same as direct path)
     scene_events = encode_transcript(rng, transcript, scene)
 
     # Generate mixed audio signal
@@ -79,5 +79,5 @@ function generate_spectrogram(::AudioPath, rng::AbstractRNG,
         mixed.duration, stft_config, filterbank
     )
 
-    return result, mixed
+    return result, mixed, scene_events
 end
