@@ -1,44 +1,23 @@
 """
     MorseSimulator
 
-A Julia package for simulating realistic CW Morse amateur radio
-communications and generating mel-spectrogram datasets for training
-Whisper-like audio-to-text neural networks.
+Simulate realistic CW Morse amateur radio communications and generate
+mel-spectrogram datasets for training neural network decoders.
 
-## Architecture
+## Pipeline
 
-The simulation consists of five conceptual layers:
+    Conversation → Morse Timing → Signal → Mel Spectrogram
 
-    Conversation → Text → Morse Timing → Signal → Spectrogram
-
-## Quick Start
+## Quick start
 
 ```julia
 using MorseSimulator, Random
 
 rng = MersenneTwister(42)
 config = DatasetConfig(path=DirectPath())
-
-# Option A: Generate sample (spectrogram + optional audio) — new transcript each time
 sample = generate_sample(rng, config)
 sample, audio = generate_sample_with_audio(rng, config)
 save_audio("test.wav", audio)
-# Use a varying rng (e.g. different seed or next rand) to get different content.
-
-# Option B: Generate transcript first, inspect, then generate from it
-scene = BandScene(rng; num_stations=3)
-transcript = generate_transcript(rng, scene)
-plot_transcript(transcript)
-# Now generate spectrogram or audio from this exact transcript
-sample = generate_sample(rng, config, transcript, scene)
-sample, audio = generate_sample_with_audio(rng, config, transcript, scene)
-save_audio("inspection.wav", audio)
-
-# Compare generation paths (same transcript → audio path vs direct path)
-spec_audio, _ = generate_spectrogram(AudioPath(), rng, transcript, scene)
-spec_direct = generate_spectrogram(DirectPath(), rng, transcript, scene)
-report = compare_paths(spec_audio, spec_direct)
-plot_consistency(report)
 ```
 """
 module MorseSimulator
@@ -56,7 +35,7 @@ using UnicodePlots
 include("types.jl")
 
 # ============================================================================
-# Phase 1: Transcript Layer
+# Transcript Layer
 # ============================================================================
 include("transcript/callsigns.jl")
 include("transcript/contests.jl")
@@ -68,7 +47,7 @@ include("transcript/bandscene.jl")
 include("transcript/conversation.jl")
 
 # ============================================================================
-# Phase 2: Morse Timing Layer
+# Morse Timing Layer
 # ============================================================================
 include("morse/code.jl")
 include("morse/timing.jl")
@@ -76,7 +55,7 @@ include("morse/encoder.jl")
 include("alignment.jl")
 
 # ============================================================================
-# Phase 2: Signal Layer
+# Signal Layer
 # ============================================================================
 include("signal/envelope.jl")
 include("signal/tone.jl")
@@ -85,7 +64,7 @@ include("signal/mixer.jl")
 include("signal/audio.jl")
 
 # ============================================================================
-# Phase 2: Spectrogram Layer
+# Spectrogram Layer
 # ============================================================================
 include("spectrogram/mel.jl")
 include("spectrogram/stft.jl")
@@ -137,6 +116,7 @@ export PropagationCondition
 
 # Types — Morse
 export Dot, Dash, SymbolGap, CharGap, WordGap
+export DotOrDash, MorseElement
 export TimingParams, TimedMorseEvent
 export StationMorseEvents, SceneMorseEvents
 

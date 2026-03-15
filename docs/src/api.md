@@ -1,6 +1,6 @@
 # API Reference
 
-## Dataset Generation
+## Dataset
 
 ```@docs
 DatasetConfig
@@ -10,7 +10,7 @@ generate_dataset
 generate_sample_with_audio
 ```
 
-## Transcript Generation
+## Transcripts
 
 ```@docs
 generate_transcript
@@ -37,9 +37,11 @@ GenericSerialContest
 ExchangeData
 generate_exchange
 format_exchange
+contest_name
+random_contest
 ```
 
-## Operator Styles
+## Operator styles
 
 ```@docs
 FastContestOp
@@ -55,7 +57,7 @@ error_rate
 aggressiveness
 ```
 
-## Conversation Modes
+## Conversation modes
 
 ```@docs
 ContestMode
@@ -64,7 +66,7 @@ DXPileupMode
 TestMode
 ```
 
-## Morse Code
+## Morse code
 
 ```@docs
 Dot
@@ -72,16 +74,20 @@ Dash
 SymbolGap
 CharGap
 WordGap
+DotOrDash
+MorseElement
 char_to_morse
 is_prosign
+prosign_to_morse
 dot_units
 is_keyed
 TimingParams
 TimedMorseEvent
 text_to_timed_events
+total_duration
 ```
 
-## Signal Generation
+## Signal
 
 ```@docs
 RaisedCosineEnvelope
@@ -115,7 +121,15 @@ SpectrogramResult
 generate_spectrogram
 ```
 
-## Consistency Metrics
+## Alignment
+
+```@docs
+AbstractTokenTiming
+TokenTiming
+NoTiming
+```
+
+## Consistency
 
 ```@docs
 L2SpectralError

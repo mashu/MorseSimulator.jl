@@ -1,70 +1,47 @@
-# Phase 2: Signal & Spectrogram
+# Signal & Spectrogram
 
-## Morse Timing
+## Morse timing
 
-Characters are converted to dots and dashes per ITU Morse Code.
-Standard timing (PARIS method):
+Text is converted to timed Morse events (`TimedMorseEvent`) with realistic operator jitter and WPM drift. The `TimingParams` struct holds dot duration, jitter sigma, and drift rate derived from the target WPM.
 
-| Element | Duration |
-|---------|----------|
-| Dot | 1 unit |
-| Dash | 3 units |
-| Symbol gap | 1 unit |
-| Character gap | 3 units |
-| Word gap | 7 units |
+Each event stores a `MorseElement` (the five-type union `Dot | Dash | SymbolGap | CharGap | WordGap`), a start time, and an actual duration.
 
-Unit duration: `1.2 / WPM` seconds.
+## Keying envelope
 
-Operator speed varies: `WPM ~ Normal(mean_wpm, σ)` with drift.
+Two envelope shapes are available via dispatch on `AbstractEnvelope{T}`:
 
-## Signal Generation
+- `RaisedCosineEnvelope{T}` — smooth rise/fall edges to reduce key clicks (default).
+- `HardEnvelope{T}` — instantaneous on/off transitions.
 
-Each station produces: `s(t) = A(t) · envelope(t) · sin(2πft)`
+## Channel effects
 
-where:
-- `A(t)` is the amplitude with QSB fading
-- `envelope(t)` is the raised-cosine shaped Morse keying
-- `f` is the station's CW tone frequency (400–900 Hz)
+### Noise models
 
-## Channel Effects
+- `GaussianNoise{T}(power)` — additive white Gaussian noise.
+- `ImpulsiveNoise{T}(power, rate)` — burst noise (QRN).
 
-- **Gaussian noise**: additive white noise at configurable SNR
-- **Impulsive noise (QRN)**: occasional burst noise
-- **QSB fading**: sinusoidal or Rayleigh fading (0.1–1 Hz)
-- **Frequency offset**: per-station Δf ~ Normal(0, 5 Hz)
+### Fading models
 
-## Multi-Station Mixing
+- `SinusoidalFading{T}(depth, rate, phase)` — regular QSB.
+- `RayleighFading{T}(scale)` — random deep fades.
 
-Signals from all stations are summed linearly.
-Overlapping transmissions create realistic collisions.
+All effects are applied in-place via `apply_noise!`, `apply_fading!`, and `apply_channel!`.
 
-## Spectrogram Generation
+## Multi-station mixing
 
-### Mode 1: Audio Path
+`mix_signals` combines per-station CW signals (each at its own tone frequency and amplitude) into a single mixed waveform. The result is a `MixedSignal` containing the composite audio samples and metadata.
 
-```
-Morse events → Envelope → CW Tone → Channel → STFT → Mel Filterbank → Spectrogram
-```
+## Mel spectrogram
 
-Produces audio that can be saved as WAV for human inspection.
+Two generation paths produce equivalent mel spectrograms:
 
-### Mode 2: Direct Path (Fast)
+| Path | Method | Use case |
+|------|--------|----------|
+| `DirectPath()` | Analytic: events → mel power directly | Training (fast) |
+| `AudioPath()` | Waveform → STFT → mel filterbank | Inspection, WAV export |
 
-```
-Morse events → Analytic envelope at frame rate → Mel energy at tone frequency → Spectrogram
-```
+Both paths apply peak normalization and log₁₀ compression. The `DirectPath` includes the same variations as the audio path: per-station amplitude, noise floor, overlap, and QSB fading.
 
-Bypasses waveform synthesis. Much faster for dataset generation.
+## Token alignment
 
-### Consistency Metrics
-
-Compare the two paths using:
-- **L2 Spectral Error**: RMS difference
-- **Cosine Similarity**: angular similarity
-- **KL Divergence**: distributional difference
-- **Mean Absolute Error**: average difference
-
-```julia
-report = compare_paths(spec_audio, spec_direct)
-plot_consistency(report)
-```
+The alignment module (`alignment.jl`) maps each token in the training label to spectrogram frame ranges using the simulator's timing data. This produces `TokenTiming` (or `NoTiming` when alignment fails), which downstream code uses via dispatch to slice spectrograms into correctly-labelled chunks for training.

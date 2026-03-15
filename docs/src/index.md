@@ -1,31 +1,56 @@
 # MorseSimulator.jl
 
-A Julia package for simulating realistic CW Morse amateur radio communications
-and generating mel-spectrogram datasets for training Whisper-like audio-to-text
-neural networks.
+Simulate realistic CW Morse amateur radio communications and generate mel-spectrogram datasets for training neural network decoders.
 
-## Overview
+## Pipeline
 
-The package provides an end-to-end simulation pipeline:
+```
+Conversation → Morse Timing → Signal → Mel Spectrogram
+```
 
-1. **Transcript Generation** — Realistic CW conversations with multiple stations, contest exchanges, ragchewing, DX pileups
-2. **Morse Encoding** — Text to timed dots/dashes with operator speed jitter
-3. **Signal Synthesis** — CW tone generation with noise, fading, multi-station mixing
-4. **Spectrogram Generation** — Mel spectrograms via audio path or fast direct path
+Each layer is built on Julia's multiple dispatch, allowing clean composition of contest formats, operator styles, propagation effects, and noise models.
 
-## Quick Start
+## Quick start
 
 ```julia
 using MorseSimulator, Random
 
 rng = MersenneTwister(42)
-
-# Generate a dataset
 config = DatasetConfig(path=DirectPath())
-dataset = generate_dataset(rng, 100, config)
 
-# Inspect a sample
-sample = dataset[1]
+# One sample
+sample = generate_sample(rng, config)
 println(sample.label)
-display(plot_spectrogram(sample.mel_spectrogram))
+
+# With audio
+sample, audio = generate_sample_with_audio(rng, config)
+save_audio("test.wav", audio)
+
+# Batch
+dataset = generate_dataset(rng, 100, config)
+```
+
+## Inspect before generating
+
+```julia
+scene = BandScene(rng; num_stations=3)
+transcript = generate_transcript(rng, scene)
+plot_transcript(transcript)
+
+# Generate from this exact transcript
+sample = generate_sample(rng, config, transcript, scene)
+```
+
+## Two spectrogram paths
+
+Both paths produce equivalent mel spectrograms:
+
+- **`DirectPath()`** — analytic; builds the mel spectrogram from Morse events without audio synthesis. Fast, used for training.
+- **`AudioPath()`** — waveform synthesis → STFT → mel. Slower, but produces audio for inspection.
+
+```julia
+spec_a, _ = generate_spectrogram(AudioPath(), rng, transcript, scene)
+spec_d = generate_spectrogram(DirectPath(), rng, transcript, scene)
+report = compare_paths(spec_a, spec_d)
+plot_consistency(report)
 ```

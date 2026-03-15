@@ -1,0 +1,6 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+MorseSimulator = "3b0fb1b5-c03f-4daf-ad66-a200d384d209"
+
+[compat]
+Documenter = "1"

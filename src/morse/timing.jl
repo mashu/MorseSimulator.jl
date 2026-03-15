@@ -33,10 +33,8 @@ end
 Create timing parameters from words-per-minute.
 PARIS standard: 1 WPM = 50 dot units per minute.
 """
-function TimingParams(wpm::Real;
-                      jitter::Float64 = 0.05,
-                      drift::Float64 = 0.01)
-    dot_dur = 1.2 / Float64(wpm)  # 60 / (50 * wpm)
+function TimingParams(wpm::Real; jitter::Float64 = 0.05, drift::Float64 = 0.01)
+    dot_dur = 1.2 / Float64(wpm)
     TimingParams{Float64}(dot_dur, jitter, drift)
 end
 
@@ -50,8 +48,7 @@ end
 A Morse element with absolute timing information.
 
 Uses `MorseElement` (a concrete 5-type union: Dot, Dash, SymbolGap, CharGap, WordGap)
-for the element field, enabling Julia's small-union optimization instead of abstract
-type dispatch on every field access.
+for the element field, enabling Julia's small-union optimization.
 
 # Fields
 - `element::MorseElement` — the Morse element (concrete union)
@@ -77,7 +74,7 @@ function jittered_duration(rng::AbstractRNG, element::AbstractMorseElement,
                            params::TimingParams{T}) where T
     base = dot_units(element) * params.dot_duration
     jitter = randn(rng) * params.jitter_sigma * params.dot_duration
-    return max(base * T(0.3), base + jitter)  # Never less than 30% of base
+    return max(base * T(0.3), base + jitter)
 end
 
 # ============================================================================
@@ -87,8 +84,7 @@ end
 """
     text_to_timed_events(rng, text, wpm; start_time, jitter, drift) -> Vector{TimedMorseEvent}
 
-Convert text string to a sequence of timed Morse events.
-WPM may drift during the transmission.
+Convert text string to a sequence of timed Morse events. WPM may drift during transmission.
 """
 function text_to_timed_events(rng::AbstractRNG, text::AbstractString, wpm::Float64;
                                start_time::Float64 = 0.0,
@@ -101,18 +97,14 @@ function text_to_timed_events(rng::AbstractRNG, text::AbstractString, wpm::Float
 
     for (wi, word) in enumerate(words)
         word_str = String(word)
-
-        # Check if word is a prosign
         symbols_list = if is_prosign(word_str)
-            [prosign_to_morse(word_str)]  # Single character group
+            [prosign_to_morse(word_str)]
         else
             [char_to_morse(c) for c in word_str]
         end
 
         for (ci, symbols) in enumerate(symbols_list)
             isempty(symbols) && continue
-
-            # WPM drift
             current_wpm = max(5.0, current_wpm + randn(rng) * drift * wpm)
             params = TimingParams(current_wpm; jitter=jitter, drift=drift)
 
@@ -120,8 +112,6 @@ function text_to_timed_events(rng::AbstractRNG, text::AbstractString, wpm::Float
                 dur = jittered_duration(rng, sym, params)
                 push!(events, TimedMorseEvent{Float64}(sym, t, dur))
                 t += dur
-
-                # Symbol gap (between dots/dashes within character)
                 if si < length(symbols)
                     gap_dur = jittered_duration(rng, SymbolGap(), params)
                     push!(events, TimedMorseEvent{Float64}(SymbolGap(), t, gap_dur))
@@ -129,7 +119,6 @@ function text_to_timed_events(rng::AbstractRNG, text::AbstractString, wpm::Float
                 end
             end
 
-            # Character gap (between characters within word, but not for prosigns which are one unit)
             if ci < length(symbols_list)
                 params_gap = TimingParams(current_wpm; jitter=jitter, drift=drift)
                 gap_dur = jittered_duration(rng, CharGap(), params_gap)
@@ -138,7 +127,6 @@ function text_to_timed_events(rng::AbstractRNG, text::AbstractString, wpm::Float
             end
         end
 
-        # Word gap
         if wi < length(words)
             params_word = TimingParams(current_wpm; jitter=jitter, drift=drift)
             gap_dur = jittered_duration(rng, WordGap(), params_word)

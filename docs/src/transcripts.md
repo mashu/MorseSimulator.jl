@@ -1,63 +1,45 @@
-# Phase 1: Transcript Simulation
+# Transcripts
 
-## Overview
+## Conversation modes
 
-Transcript generation simulates realistic CW amateur radio conversations
-involving up to 6 stations. The system models:
+The simulator supports four conversation modes, each producing a different transcript structure:
 
-- **Contest exchanges** with proper format and serial numbers
-- **Ragchew conversations** with greetings, names, QTH, rig info
-- **DX pileups** with simultaneous callers and station selection
-- **Test transmissions** with test patterns
+| Mode | Description |
+|------|-------------|
+| `ContestMode()` | Rapid exchange of signal reports, serial numbers, and contest-specific data |
+| `RagchewMode()` | Extended casual conversation between two operators |
+| `DXPileupMode()` | One DX station working a pile of callers |
+| `TestMode()` | Simple CQ and response pairs for debugging |
 
-## Band Scene
+## Operator styles
 
-A `BandScene` encapsulates the radio environment:
+Each station is assigned an operator style that controls speed, jitter, verbosity, and error rate:
 
-```julia
-scene = BandScene(rng;
-    num_stations = 4,
-    contest = CQWWContest(),
-    mode = ContestMode(),
-    propagation = moderate_propagation(),
-    noise_floor_db = -20.0
-)
-```
+| Style | Typical WPM | Character |
+|-------|-------------|-----------|
+| `FastContestOp` | 35–40 | Terse, fast, contest-optimized |
+| `MidSkillContestOp` | 25–30 | Competent contester |
+| `CasualRagchewer` | 18–22 | Verbose, uses "DE", long CQs |
+| `BeginnerOp` | 12–18 | Slow, makes errors, retries |
+| `DXPileupManager` | 28–35 | Short, directive transmissions |
+| `QRPOperator` | 15–20 | Low power, careful sending |
 
-## Station Model
+## Contest formats
 
-Each `Station` has an operator style that controls behavior via dispatch:
+Eight contest types are supported, each defining exchange rules, required fields, and formatting:
 
-```julia
-station = Station(rng, "W1ABC", FastContestOp())
-```
+`CQWWContest`, `CQWPXContest`, `ARRLDXContest`, `IARUHFContest`, `SPDXContest`, `WAEContest`, `AllAsianDXContest`, `GenericSerialContest`.
 
-## Conversation Modes
+## Band scene
 
-```julia
-# Contest: fast exchanges with CQ runs
-transcript = generate_transcript(rng; mode=ContestMode())
+A `BandScene` models the RF environment: multiple stations with different frequencies, amplitudes, and propagation conditions sharing a band segment. The transcript records each station's transmissions with time offsets so overlapping signals are possible.
 
-# Ragchew: extended QSO with personal info
-transcript = generate_transcript(rng; mode=RagchewMode())
+## Training labels
 
-# DX Pileup: multiple callers, DX station picks one
-transcript = generate_transcript(rng; mode=DXPileupMode())
-
-# Test: VVV patterns, QRL checks
-transcript = generate_transcript(rng; mode=TestMode())
-```
-
-## Realistic Features
-
-- Sending errors with corrections (`RST 579 EEE 589`)
-- Partial callsign requests (`ABC?`, `?7NA`)
-- Retry logic (`AGN`, `PSE AGN`, `QRS PSE`)
-- Variable verbosity per operator style
-- Overlapping transmissions (collisions)
-
-## Output Format
+Labels use a structured flat-text format with special tokens:
 
 ```
-<START> CQ CQ DE SO5KM SO5KM DE SO7NA UR RST 5NN TU SO7NA DE SO5KM 5NN TU K <END>
+<START> [TS] [S1] CQ CQ W1ABC [TE] [TS] [S2] W1ABC DE N2XYZ 5NN 03 [TE] <END>
 ```
+
+`[TS]`/`[TE]` mark transmission boundaries; `[S1]`–`[S6]` identify the station.

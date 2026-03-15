@@ -3,12 +3,21 @@ using Documenter, MorseSimulator
 makedocs(
     sitename = "MorseSimulator.jl",
     modules = [MorseSimulator],
-    format = Documenter.HTML(prettyurls = false),
+    format = Documenter.HTML(
+        prettyurls = get(ENV, "CI", nothing) == "true",
+        canonical = "https://mashu.github.io/MorseSimulator.jl",
+    ),
     pages = [
         "Home" => "index.md",
         "Architecture" => "architecture.md",
-        "Phase 1: Transcripts" => "transcripts.md",
-        "Phase 2: Signal & Spectrogram" => "signal.md",
+        "Transcripts" => "transcripts.md",
+        "Signal & Spectrogram" => "signal.md",
         "API Reference" => "api.md",
-    ]
+    ],
+)
+
+deploydocs(
+    repo = "github.com/mashu/MorseSimulator.jl.git",
+    devbranch = "main",
+    push_preview = true,
 )

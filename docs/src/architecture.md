@@ -1,65 +1,31 @@
 # Architecture
 
-## Pipeline Layers
+## Type hierarchy
+
+All behaviour is controlled through Julia's multiple dispatch on an abstract type hierarchy:
 
 ```
-Conversation → Text → Morse Timing → Signal → Spectrogram
-```
-
-## Type Hierarchy
-
-All behavior is controlled through Julia's multiple dispatch system.
-The abstract type hierarchy forms the backbone of the package:
-
-```
-AbstractContest          ─┬─ CQWWContest, CQWPXContest, ARRLDXContest
-                          ├─ IARUHFContest, SPDXContest, WAEContest
-                          └─ AllAsianDXContest, GenericSerialContest
-
-AbstractOperatorStyle    ─┬─ FastContestOp, CasualRagchewer
-                          ├─ BeginnerOp, DXPileupManager
-                          └─ MidSkillContestOp, QRPOperator
-
+AbstractContest          ─── CQWWContest, CQWPXContest, ARRLDXContest, ...
+AbstractOperatorStyle    ─── FastContestOp, CasualRagchewer, BeginnerOp, ...
 AbstractConversationMode ─── ContestMode, RagchewMode, DXPileupMode, TestMode
-
 AbstractMorseElement     ─── Dot, Dash, SymbolGap, CharGap, WordGap
-
 AbstractEnvelope{T}      ─── RaisedCosineEnvelope{T}, HardEnvelope{T}
-
 AbstractNoiseModel{T}    ─── GaussianNoise{T}, ImpulsiveNoise{T}
-
 AbstractFadingModel{T}   ─── SinusoidalFading{T}, RayleighFading{T}
-
 AbstractSpectrogramPath  ─── AudioPath, DirectPath
 ```
 
-## Design Principles
+## Design principles
 
-### Multiple Dispatch over Conditionals
+**Multiple dispatch over conditionals.** Operator behaviour, contest exchanges, and envelope shapes are selected by dispatch rather than `if`/`elseif` chains:
 
-Instead of:
 ```julia
-# Bad: type checking
-if style isa FastContestOp
-    return "CQ $(station.callsign)"
-elseif style isa CasualRagchewer
-    ...
-end
+generate_cq(rng, station, ::FastContestOp)   = "CQ $(station.callsign)"
+generate_cq(rng, station, ::CasualRagchewer) = "CQ CQ CQ DE $(station.callsign) K"
 ```
 
-We use dispatch:
-```julia
-# Good: multiple dispatch
-generate_cq(rng, station, ::FastContestOp) = "CQ $(station.callsign)"
-generate_cq(rng, station, ::CasualRagchewer) = "CQ CQ CQ DE ..."
-```
+**Parametric type stability.** Signal-layer types are parameterized on `T<:AbstractFloat` so all arithmetic stays type-stable at compile time.
 
-### Parametric Type Stability
+**Concrete union storage.** The Morse code table stores `Vector{DotOrDash}` (a two-type union of `Dot` and `Dash`) and `TimedMorseEvent` stores `MorseElement` (a five-type union), both of which Julia's small-union optimization handles efficiently.
 
-All signal-layer types are parameterized on `T<:AbstractFloat` for
-compile-time type inference and zero-cost abstraction.
-
-### Explicit RNG Threading
-
-All random operations accept an `AbstractRNG` as first argument
-for full reproducibility.
+**Explicit RNG threading.** Every random operation takes an `AbstractRNG` as its first argument for full reproducibility.

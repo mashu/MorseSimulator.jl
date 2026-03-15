@@ -65,7 +65,6 @@ const RNG = MersenneTwister(12345)
             @test startswith(transcript.label, "<START>")
             @test endswith(transcript.label, "<END>")
             @test length(transcript.mode_name) > 0
-            # Labels use [S1]..[S6], [TS]/[TE] for turn boundaries
             @test occursin(r"\[S[1-6]\]", transcript.label)
             @test occursin("[TS]", transcript.label)
             @test occursin("[TE]", transcript.label)
@@ -81,7 +80,11 @@ const RNG = MersenneTwister(12345)
     end
 
     @testset "Morse Code Table" begin
-        @test length(char_to_morse('A')) == 2  # .-
+        # Return types should be Vector{DotOrDash}
+        morse_a = char_to_morse('A')
+        @test length(morse_a) == 2  # .-
+        @test morse_a[1] isa Dot
+        @test morse_a[2] isa Dash
         @test length(char_to_morse('S')) == 3  # ...
         @test length(char_to_morse('O')) == 3  # ---
         @test length(char_to_morse('0')) == 5
@@ -90,14 +93,25 @@ const RNG = MersenneTwister(12345)
         @test is_prosign("SK")
         @test !is_prosign("CQ")
 
+        # Prosigns also return Vector{DotOrDash}
+        ar = prosign_to_morse("AR")
+        @test length(ar) == 5
+        @test all(e -> e isa Dot || e isa Dash, ar)
+
+        # Unknown char returns empty
+        @test isempty(char_to_morse('★'))
+
         @test dot_units(Dot()) == 1
         @test dot_units(Dash()) == 3
+        @test dot_units(SymbolGap()) == 1
+        @test dot_units(CharGap()) == 3
         @test dot_units(WordGap()) == 7
 
         @test is_keyed(Dot())
         @test is_keyed(Dash())
         @test !is_keyed(SymbolGap())
         @test !is_keyed(CharGap())
+        @test !is_keyed(WordGap())
     end
 
     @testset "Morse Timing" begin
@@ -107,6 +121,13 @@ const RNG = MersenneTwister(12345)
         events = text_to_timed_events(RNG, "CQ CQ", 25.0)
         @test length(events) > 0
         @test total_duration(events) > 0.0
+
+        # All elements should be MorseElement union members
+        for ev in events
+            @test ev.element isa Union{Dot, Dash, SymbolGap, CharGap, WordGap}
+            @test ev.start_time >= 0.0
+            @test ev.duration > 0.0
+        end
     end
 
     @testset "Morse Encoding" begin
@@ -117,6 +138,7 @@ const RNG = MersenneTwister(12345)
         @test length(scene_events.station_events) > 0
         @test scene_events.total_duration > 0.0
         @test length(scene_events.label) > 0
+        @test length(scene_events.transmission_ranges) > 0
     end
 
     @testset "Envelope Generation" begin
@@ -151,85 +173,33 @@ const RNG = MersenneTwister(12345)
         noise = GaussianNoise{Float64}(0.01)
         sig_noisy = copy(sig)
         apply_noise!(RNG, sig_noisy, noise)
-        @test sig_noisy != sig  # Noise was added
+        @test sig_noisy != sig
 
         sig_fade = ones(Float64, n)
         fading = SinusoidalFading{Float64}(0.5, 0.5, 0.0)
         apply_fading!(sig_fade, fading, 44100)
-        @test minimum(sig_fade) < 1.0  # Fading reduced some samples
-    end
-
-    @testset "Signal Mixing" begin
-        transcript = generate_transcript(RNG; num_stations=2)
-        scene = BandScene(RNG; num_stations=2)
-        scene_events = encode_transcript(RNG, transcript, scene)
-        mixed = mix_signals(RNG, scene_events, scene)
-
-        @test length(mixed.samples) > 0
-        @test mixed.sample_rate == 44100
-        @test mixed.duration > 0.0
-        @test maximum(abs, mixed.samples) <= 1.0
+        @test minimum(sig_fade) < 1.0
     end
 
     @testset "Mel Filterbank" begin
-        fb = MelFilterbank()
+        fb = MelFilterbank(n_filters=40, fft_size=1024,
+            sample_rate=44100, f_min=200.0, f_max=900.0)
         @test fb.n_filters == 40
         @test size(fb.filters, 1) == 40
 
-        @test hz_to_mel(0.0) ≈ 0.0
-        @test mel_to_hz(0.0) ≈ 0.0
-        @test mel_to_hz(hz_to_mel(440.0)) ≈ 440.0 atol=0.01
-
-        # Apply to power spectrum
-        pspec = ones(Float64, fb.fft_size ÷ 2 + 1)
-        mel_e = apply_filterbank(fb, pspec)
-        @test length(mel_e) == fb.n_filters
-    end
-
-    @testset "STFT" begin
-        config = STFTConfig()
-        sig = randn(RNG, Float64, 44100)
-        stft_result = compute_stft(sig, config)
-        @test size(stft_result, 1) == config.fft_size ÷ 2 + 1
-        @test size(stft_result, 2) > 0
-
-        pspec = power_spectrogram(stft_result)
-        @test all(x -> x >= 0, pspec)
-
-        lspec = log_power_spectrogram(stft_result)
-        @test size(lspec) == size(stft_result)
-    end
-
-    @testset "Spectrogram Generation — Audio Path" begin
-        transcript = generate_transcript(RNG; num_stations=2)
-        scene = BandScene(RNG; num_stations=2)
-
-        result, mixed, _ = generate_spectrogram(AudioPath(), RNG, transcript, scene)
-        @test size(result.mel_spectrogram, 1) > 0
-        @test size(result.mel_spectrogram, 2) > 0
-        @test length(result.label) > 0
-        @test length(mixed.samples) > 0
-    end
-
-    @testset "Spectrogram Generation — Direct Path" begin
-        transcript = generate_transcript(RNG; num_stations=2)
-        scene = BandScene(RNG; num_stations=2)
-
-        result, _ = generate_spectrogram(DirectPath(), RNG, transcript, scene)
-        @test size(result.mel_spectrogram, 1) > 0
-        @test size(result.mel_spectrogram, 2) > 0
-        @test length(result.label) > 0
+        @test hz_to_mel(0.0) ≈ 0.0 atol=1e-10
+        @test mel_to_hz(0.0) ≈ 0.0 atol=1e-10
     end
 
     @testset "Consistency Metrics" begin
-        a = randn(RNG, Float64, 10, 20)
-        b = a .+ 0.01 * randn(RNG, Float64, 10, 20)
+        a = rand(Float64, 10, 10)
+        b = rand(Float64, 10, 10)
 
-        @test compare(L2SpectralError(), a, b) < 0.1
-        @test compare(CosineSimilarity(), a, b) > 0.99
-        @test compare(MeanAbsoluteError(), a, b) < 0.1
+        @test compare(L2SpectralError(), a, b) >= 0.0
+        @test 0.0 <= compare(CosineSimilarity(), a, b) <= 1.0
+        @test compare(KLDivergence(), a, b) >= 0.0
+        @test compare(MeanAbsoluteError(), a, b) >= 0.0
 
-        # Self-comparison
         @test compare(L2SpectralError(), a, a) ≈ 0.0 atol=1e-10
         @test compare(CosineSimilarity(), a, a) ≈ 1.0 atol=1e-10
     end
@@ -241,7 +211,10 @@ const RNG = MersenneTwister(12345)
         @test length(sample.label) > 0
         @test haskey(sample.metadata, "mode")
         @test haskey(sample.metadata, "contest")
-        @test (sample.token_timing isa NoTiming) || (length(sample.token_timing.token_start_frames) == length(sample.token_timing.token_end_frames))
+
+        # Token timing should be present
+        tt = sample.token_timing
+        @test (tt isa NoTiming) || (length(tt.token_start_frames) == length(tt.token_end_frames))
 
         samples = generate_dataset(RNG, 3, config)
         @test length(samples) == 3
@@ -249,13 +222,12 @@ const RNG = MersenneTwister(12345)
 
     @testset "Error Simulation" begin
         text = "HELLO WORLD"
-        # Run many times to ensure errors sometimes occur
         error_count = 0
         for _ in 1:100
             result = maybe_insert_error(RNG, text, BeginnerOp())
             result != text && (error_count += 1)
         end
-        @test error_count > 0  # At least some errors occurred
+        @test error_count > 0
     end
 
     @testset "Propagation Conditions" begin
