@@ -12,9 +12,32 @@ using Random
 # Conversation Modes
 # ============================================================================
 
+"""
+    ContestMode <: AbstractConversationMode
+
+Contest-style QSOs: CQ, call, exchange, TU. Short and structured.
+"""
 struct ContestMode    <: AbstractConversationMode end
+
+"""
+    RagchewMode <: AbstractConversationMode
+
+Casual ragchew: longer exchanges, greetings, names, etc.
+"""
 struct RagchewMode    <: AbstractConversationMode end
+
+"""
+    DXPileupMode <: AbstractConversationMode
+
+DX pileup: multiple callers, retries, confirmations.
+"""
 struct DXPileupMode   <: AbstractConversationMode end
+
+"""
+    TestMode <: AbstractConversationMode
+
+Minimal test QSOs for debugging or simple demos.
+"""
 struct TestMode       <: AbstractConversationMode end
 
 mode_name(::ContestMode)  = "Contest"

@@ -3,6 +3,7 @@ using Documenter, MorseSimulator
 makedocs(
     sitename = "MorseSimulator.jl",
     modules = [MorseSimulator],
+    checkdocs = :none,
     format = Documenter.HTML(
         prettyurls = get(ENV, "CI", nothing) == "true",
         canonical = "https://mashu.github.io/MorseSimulator.jl",

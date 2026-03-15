@@ -197,6 +197,11 @@ format_exchange(::GenericSerialContest, exch::ExchangeData) =
 # Contest Name for Display
 # ============================================================================
 
+"""
+    contest_name(contest) -> String
+
+Return a short display name for the contest type. Dispatches on contest type.
+"""
 contest_name(::CQWWContest) = "CQ WW DX"
 contest_name(::CQWPXContest) = "CQ WPX"
 contest_name(::ARRLDXContest) = "ARRL DX"
