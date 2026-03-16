@@ -51,6 +51,10 @@ end
 
 Convert a transcript into timed Morse events for all stations.
 Processes transmissions in time order so transmission_ranges match label order.
+
+Every transmission in the transcript produces an entry in transmission_ranges.
+Missing stations or empty event sequences are errors (the transcript and scene
+are generated together, so they must be consistent).
 """
 function encode_transcript(rng::AbstractRNG, transcript::Transcript, scene::BandScene)
     station_lookup = Dict(s.callsign => s for s in scene.stations)
@@ -64,7 +68,10 @@ function encode_transcript(rng::AbstractRNG, transcript::Transcript, scene::Band
 
     for tx in sorted_txs
         station = get(station_lookup, tx.callsign, nothing)
-        station === nothing && continue
+        if station === nothing
+            error("encode_transcript: station \"$(tx.callsign)\" not found in scene. " *
+                  "Transcript and scene must be generated together.")
+        end
 
         events = text_to_timed_events(
             rng, tx.text, tx.wpm;
@@ -73,7 +80,11 @@ function encode_transcript(rng::AbstractRNG, transcript::Transcript, scene::Band
             drift = 0.01
         )
         n = length(events)
-        n == 0 && continue
+        if n == 0
+            error("encode_transcript: text_to_timed_events produced 0 events " *
+                  "for transmission text=\"$(tx.text)\" wpm=$(tx.wpm) from station \"$(tx.callsign)\". " *
+                  "Transcripts must not contain empty text.")
+        end
 
         start_idx = get(station_len, tx.callsign, 0) + 1
         end_idx = start_idx + n - 1
