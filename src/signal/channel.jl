@@ -38,11 +38,6 @@ struct ImpulsiveNoise{T<:AbstractFloat} <: AbstractNoiseModel{T}
     amplitude::T
 end
 
-"""
-    apply_noise!(rng, signal, noise::GaussianNoise)
-
-Add Gaussian noise to signal in-place.
-"""
 function apply_noise!(rng::AbstractRNG, signal::Vector{T},
                       noise::GaussianNoise{T}) where T<:AbstractFloat
     @inbounds for i in eachindex(signal)
@@ -51,11 +46,6 @@ function apply_noise!(rng::AbstractRNG, signal::Vector{T},
     return signal
 end
 
-"""
-    apply_noise!(rng, signal, noise::ImpulsiveNoise)
-
-Add impulsive noise to signal in-place.
-"""
 function apply_noise!(rng::AbstractRNG, signal::Vector{T},
                       noise::ImpulsiveNoise{T}) where T<:AbstractFloat
     @inbounds for i in eachindex(signal)
@@ -70,8 +60,7 @@ end
     constant_noise_power(nm) -> Float64
 
 Noise power (amplitude²) that is constant in time. Gaussian: amp²; Impulsive: 0
-(impulses are applied per-frame in mel path). Used by direct path to avoid
-duplicating noise model logic.
+(impulses are applied per-frame in mel path).
 """
 constant_noise_power(nm::GaussianNoise{T}) where T = Float64(nm.amplitude^2)
 constant_noise_power(nm::ImpulsiveNoise{T}) where T = zero(Float64)
@@ -118,7 +107,7 @@ waveform (apply_fading!) and direct mel path.
 """
 function fade_factor_at_time(fading::SinusoidalFading{T}, t::Real) where T
     phase = fading.phase + T(2π) * fading.frequency * T(t)
-    return Float64(one(T) - fading.depth * T(0.5) * (one(T) + sin(phase)))
+    Float64(one(T) - fading.depth * T(0.5) * (one(T) + sin(phase)))
 end
 
 function fade_factor_at_time(fading::RayleighFading{T}, t::Real) where T
@@ -134,14 +123,9 @@ function fade_factor_at_time(fading::RayleighFading{T}, t::Real) where T
         im += sin(angle)
     end
     mag = sqrt(re^2 + im^2) / n_paths
-    return Float64(max(0.0, one(T) - fading.depth * (one(T) - T(mag))))
+    Float64(max(0.0, one(T) - fading.depth * (one(T) - T(mag))))
 end
 
-"""
-    apply_fading!(signal, fading, sample_rate)
-
-Apply fading to signal in-place (uses fade_factor_at_time per sample).
-"""
 function apply_fading!(signal::Vector{T}, fading::SinusoidalFading{T},
                        sample_rate::Int) where T<:AbstractFloat
     @inbounds for i in eachindex(signal)
@@ -178,21 +162,19 @@ struct ChannelConfig{T<:AbstractFloat}
     fading_models::Vector{<:AbstractFadingModel{T}}
 end
 
-# Target SNR (dB) range when mix_rms is provided: noise is set so mixed signal has this SNR
 """
     ChannelConfig(rng, scene) -> ChannelConfig{Float64}
 
-Create a channel configuration from a band scene's propagation conditions.
-Noise is set from the scene noise floor (band noise); SNR emerges from
-signal levels (station amplitude, path loss).
+Create a channel configuration from a band scene.
+Noise amplitude is derived from the scene's SNR target via `noise_amplitude(scene)`.
 """
 function ChannelConfig(rng::AbstractRNG, scene::BandScene)
     prop = scene.propagation
     Tf = Float64
 
-    noise_models = AbstractNoiseModel{Tf}[]
-    noise_amp = Tf(10.0^(scene.noise_floor_db / 20.0))
-    push!(noise_models, GaussianNoise{Tf}(noise_amp))
+    noise_amp = Tf(noise_amplitude(scene))
+
+    noise_models = AbstractNoiseModel{Tf}[GaussianNoise{Tf}(noise_amp)]
     if rand(rng) < 0.3
         push!(noise_models, ImpulsiveNoise{Tf}(Tf(0.0001), noise_amp * Tf(5.0)))
     end
@@ -200,13 +182,12 @@ function ChannelConfig(rng::AbstractRNG, scene::BandScene)
     fading_models = AbstractFadingModel{Tf}[]
     if rand(rng) < prop.qsb_probability
         f_qsb = prop.qsb_freq_range[1] + rand(rng) * (prop.qsb_freq_range[2] - prop.qsb_freq_range[1])
-        depth = prop.qsb_depth_mean + randn(rng) * 0.1
-        depth = clamp(depth, 0.0, 0.95)
+        depth = clamp(prop.qsb_depth_mean + randn(rng) * 0.1, 0.0, 0.95)
         phase = rand(rng) * Tf(2π)
         push!(fading_models, SinusoidalFading{Tf}(Tf(depth), Tf(f_qsb), phase))
     end
 
-    return ChannelConfig{Tf}(noise_models, fading_models)
+    ChannelConfig{Tf}(noise_models, fading_models)
 end
 
 """

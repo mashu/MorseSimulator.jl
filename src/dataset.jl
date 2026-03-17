@@ -55,7 +55,7 @@ function DatasetConfig(;
         path::AbstractSpectrogramPath = DirectPath(),
         sample_rate::Int = 44100,
         fft_size::Int = 1024,
-        hop_size::Int = 128,   # ~2.9 ms/frame @ 44.1 kHz → 4–5+ frames per dot
+        hop_size::Int = 128,
         n_mels::Int = 40,
         f_min::Float64 = 200.0,
         f_max::Float64 = 900.0,
@@ -69,6 +69,21 @@ function DatasetConfig(;
 end
 
 # ============================================================================
+# Shared metadata construction
+# ============================================================================
+
+function sample_metadata(transcript::Transcript, scene::BandScene, sample_rate::Int, duration::Float64)
+    Dict{String,Any}(
+        "mode"         => transcript.mode_name,
+        "contest"      => transcript.contest_name,
+        "num_stations" => length(scene.stations),
+        "duration"     => duration,
+        "sample_rate"  => sample_rate,
+        "snr_db"       => scene.snr_db,
+    )
+end
+
+# ============================================================================
 # Sample Generation
 # ============================================================================
 
@@ -79,48 +94,34 @@ end
 Generate a single training sample.
 
 - **Without transcript**: draws a new band scene and generates a new transcript
-  internally. Use a varying `rng` (e.g. different seeds or advancing the RNG)
-  to get different content each time.
+  internally. Use a varying `rng` for different content each time.
 
 - **With transcript and scene**: uses the given transcript and band scene to
-  generate the spectrogram (and optionally audio). Use this when you have
-  already generated and inspected a transcript and want to produce the
-  corresponding sample from it.
+  generate the spectrogram. Use when you have already inspected a transcript.
 """
 function generate_sample(rng::AbstractRNG, config::DatasetConfig)
     n_stations = rand(rng, config.num_stations_range)
-
-    # One scene: transcript and spectrogram must use the same stations/callsigns
     scene = BandScene(rng; num_stations=n_stations)
     transcript = generate_transcript(rng, scene)
-
-    return generate_sample(rng, config, transcript, scene)
+    generate_sample(rng, config, transcript, scene)
 end
 
 function generate_sample(rng::AbstractRNG, config::DatasetConfig,
                         transcript::Transcript, scene::BandScene)
     result, scene_events = generate_spec_and_events(config.path, rng, transcript, scene, config)
 
-    n_stations = length(scene.stations)
-    metadata = Dict{String,Any}(
-        "mode" => transcript.mode_name,
-        "contest" => transcript.contest_name,
-        "num_stations" => n_stations,
-        "duration" => result.duration,
-        "sample_rate" => config.sample_rate
-    )
+    metadata = sample_metadata(transcript, scene, config.sample_rate, result.duration)
 
     n_frames = size(result.mel_spectrogram, 2)
-    hop_size = config.stft_config.hop_size
     token_timing = compute_token_timing(
         transcript, scene_events, n_frames, result.duration,
-        config.sample_rate, hop_size,
+        config.sample_rate, config.stft_config.hop_size,
     )
 
-    return DatasetSample{Float64}(result.mel_spectrogram, result.label, metadata, token_timing)
+    DatasetSample{Float64}(result.mel_spectrogram, result.label, metadata, token_timing)
 end
 
-# Dispatch: return (result, scene_events) for alignment; no leading underscore per style.
+# Dispatch on path type for spectrogram generation
 function generate_spec_and_events(::DirectPath, rng, transcript, scene, config)
     generate_spectrogram(DirectPath(), rng, transcript, scene;
         sample_rate=config.sample_rate,
@@ -142,11 +143,7 @@ end
 Generate `n` training samples.
 """
 function generate_dataset(rng::AbstractRNG, n::Int, config::DatasetConfig)
-    samples = Vector{DatasetSample{Float64}}(undef, n)
-    for i in 1:n
-        samples[i] = generate_sample(rng, config)
-    end
-    return samples
+    [generate_sample(rng, config) for _ in 1:n]
 end
 
 generate_dataset(n::Int, config::DatasetConfig) =
@@ -165,17 +162,12 @@ generate_dataset(n::Int; kwargs...) =
 
 Generate a sample with both spectrogram and audio for inspection.
 Always uses AudioPath (full audio synthesis) regardless of config.
-
-- **Without transcript**: generates a new scene and transcript internally; vary
-  `rng` for different content.
-- **With transcript and scene**: uses the given transcript and scene to generate
-  the audio and spectrogram (e.g. after inspecting the transcript).
 """
 function generate_sample_with_audio(rng::AbstractRNG, config::DatasetConfig)
     n_stations = rand(rng, config.num_stations_range)
     scene = BandScene(rng; num_stations=n_stations)
     transcript = generate_transcript(rng, scene)
-    return generate_sample_with_audio(rng, config, transcript, scene)
+    generate_sample_with_audio(rng, config, transcript, scene)
 end
 
 function generate_sample_with_audio(rng::AbstractRNG, config::DatasetConfig,
@@ -185,21 +177,14 @@ function generate_sample_with_audio(rng::AbstractRNG, config::DatasetConfig,
         stft_config=config.stft_config,
         filterbank=config.filterbank)
 
-    n_stations = length(scene.stations)
-    metadata = Dict{String,Any}(
-        "mode" => transcript.mode_name,
-        "contest" => transcript.contest_name,
-        "num_stations" => n_stations,
-        "duration" => result.duration,
-        "sample_rate" => config.sample_rate
-    )
+    metadata = sample_metadata(transcript, scene, config.sample_rate, result.duration)
 
     n_frames = size(result.mel_spectrogram, 2)
-    hop_size = config.stft_config.hop_size
     token_timing = compute_token_timing(
         transcript, scene_events, n_frames, result.duration,
-        config.sample_rate, hop_size,
+        config.sample_rate, config.stft_config.hop_size,
     )
+
     sample = DatasetSample{Float64}(result.mel_spectrogram, result.label, metadata, token_timing)
     return sample, mixed
 end

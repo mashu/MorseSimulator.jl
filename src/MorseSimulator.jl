@@ -181,7 +181,7 @@ export compare, compare_paths
 
 # Functions — Propagation
 export good_propagation, moderate_propagation, poor_propagation
-export signal_strength
+export signal_strength, noise_amplitude
 
 # Functions — Visualization
 export plot_transcript, plot_spectrogram, plot_waveform
