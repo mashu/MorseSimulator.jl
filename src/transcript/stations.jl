@@ -46,11 +46,15 @@ const TONE_SAME_AS_CALLER_PROB = 0.15     # probability a responder uses caller'
 # Offset magnitude bias: use power law so smaller offsets (closer to caller) more likely
 const TONE_OFFSET_POWER = 1.5             # magnitude = MIN + (MAX-MIN) * rand()^POWER
 
+"""Minimum tone separation (Hz) so stations land in distinct spectrogram bins. Match typical 10 Hz spacing."""
+const MIN_TONE_SEPARATION_Hz = 10.0
+
 """
-    Station(rng, callsign, style; ref_freq=nothing, is_caller=false) -> Station
+    Station(rng, callsign, style; ref_freq=nothing, is_caller=false, tone_freq=nothing) -> Station
 
 Construct a station with random signal characteristics.
 
+If `tone_freq` is provided, use it (clamped to TONE_BAND); otherwise:
 If `ref_freq` is set, the station's tone is relative to the caller:
 - Caller (`is_caller=true`): uses `ref_freq` exactly.
 - Others: with probability `TONE_SAME_AS_CALLER_PROB` use same tone; otherwise
@@ -60,15 +64,17 @@ If `ref_freq` is not set, tone is uniform in 400–900 Hz (legacy behavior).
 """
 function Station(rng::AbstractRNG, callsign::String, style::S;
                  ref_freq::Union{Float64,Nothing} = nothing,
-                 is_caller::Bool = false) where {S<:AbstractOperatorStyle}
-    tone = if ref_freq !== nothing
+                 is_caller::Bool = false,
+                 tone_freq::Union{Float64,Nothing} = nothing) where {S<:AbstractOperatorStyle}
+    tone = if tone_freq !== nothing
+        Float64(clamp(tone_freq, TONE_BAND[1], TONE_BAND[2]))
+    elseif ref_freq !== nothing
         if is_caller
             Float64(ref_freq)
         else
             if rand(rng) < TONE_SAME_AS_CALLER_PROB
                 Float64(ref_freq)
             else
-                # 0–350 Hz from caller; bias toward smaller offset (rand^power)
                 span = TONE_OFFSET_MAX - TONE_OFFSET_MIN
                 magnitude = TONE_OFFSET_MIN + span * Float64(rand(rng))^TONE_OFFSET_POWER
                 offset = magnitude * (rand(rng, Bool) ? 1.0 : -1.0)

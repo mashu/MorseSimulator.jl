@@ -2,8 +2,8 @@
     MorseSimulator.jl/src/spectrogram/linear_band.jl
 
 Linear-frequency band for spectrograms. Uses raw FFT bins in [f_min, f_max].
-Gives ~(sr/fft_size) Hz resolution (e.g. ~10.77 Hz at 44.1 kHz, fft_size=4096).
-Better suited than mel for narrow-band CW where we need to separate stations 10 Hz apart.
+Bin width = sample_rate/fft_size Hz. For 8 Hz or better separation use target_bin_width_Hz=8
+(e.g. fft_size=8192 @ 44.1 kHz → ~5.4 Hz/bin). Time resolution is unchanged (set by hop_size).
 """
 
 """
@@ -29,16 +29,44 @@ struct LinearBand
     bin_hi::Int
 end
 
+"""
+    LinearBand(; fft_size, sample_rate, f_min, f_max) -> LinearBand
+    LinearBand(; sample_rate, f_min, f_max, target_bin_width_Hz, n_bins) -> LinearBand
+
+Construct a linear band. Either pass fft_size explicitly, or pass target_bin_width_Hz (e.g. 8)
+and optionally n_bins (e.g. 128). For the latter, fft_size is chosen so bin width ≤ target
+(smallest power-of-2 ≥ sample_rate/target_bin_width_Hz). If n_bins is given, f_max is set so
+the band has exactly that many bins (f_max = f_min + n_bins * bin_width, then bin_hi trimmed).
+"""
 function LinearBand(;
-    fft_size::Int = 4096,
+    fft_size::Union{Int,Nothing} = nothing,
     sample_rate::Int = 44100,
     f_min::Float64 = 200.0,
-    f_max::Float64 = 900.0)
+    f_max::Union{Float64,Nothing} = 900.0,
+    target_bin_width_Hz::Union{Float64,Nothing} = nothing,
+    n_bins::Union{Int,Nothing} = nothing)
+    if fft_size === nothing
+        if target_bin_width_Hz !== nothing || n_bins !== nothing
+            # New API: choose fft_size for target resolution (8 Hz or better)
+            target = something(target_bin_width_Hz, 10.0)
+            min_fft = ceil(Int, sample_rate / target)
+            fft_size = nextpow(2, min_fft)
+        else
+            fft_size = 4096  # original default
+        end
+    end
     n_fft_bins = fft_size ÷ 2 + 1
     bin_lo = max(1, 1 + floor(Int, f_min * fft_size / sample_rate))
-    bin_hi = min(n_fft_bins, 1 + floor(Int, f_max * fft_size / sample_rate))
-    bin_lo = min(bin_lo, bin_hi)  # ensure valid range
-    LinearBand(fft_size, sample_rate, f_min, f_max, bin_lo, bin_hi)
+    if n_bins !== nothing
+        bin_hi = min(n_fft_bins, bin_lo + n_bins - 1)
+    elseif f_max !== nothing
+        bin_hi = min(n_fft_bins, 1 + floor(Int, f_max * fft_size / sample_rate))
+    else
+        bin_hi = n_fft_bins
+    end
+    bin_lo = min(bin_lo, bin_hi)
+    actual_f_max = (bin_hi - 1) * sample_rate / fft_size
+    LinearBand(fft_size, sample_rate, f_min, actual_f_max, bin_lo, bin_hi)
 end
 
 """Number of frequency bins in the band."""

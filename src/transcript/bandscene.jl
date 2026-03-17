@@ -54,13 +54,19 @@ struct BandScene{C<:AbstractContest, M<:AbstractConversationMode}
 end
 
 """
-    BandScene(rng; num_stations, contest, mode, propagation, snr_range) -> BandScene
+    BandScene(rng; num_stations, contest, mode, propagation, snr_range, min_tone_separation_Hz) -> BandScene
 
 Construct a BandScene with SNR-controlled noise.
 
-A target waveform SNR is sampled uniformly from `snr_range` (default: (-20, 10) dB).
-Noise amplitude is derived on demand via `noise_amplitude(scene)` from station
-amplitudes and propagation, keeping the signal always learnable.
+Stations are assigned tones exactly `min_tone_separation_Hz` apart (ref_freq, ref_freq ± step,
+ref_freq ± 2*step, …) so they land in distinct spectrogram bins. With linear band, bin width
+is sample_rate/fft_size (e.g. ~10.77 Hz at 44.1 kHz, 4096 FFT). Tones are assigned by
+round(f * fft_size / sr), so they end up in the same bin only if closer than ~½ bin width.
+Use min_tone_separation_Hz >= sample_rate/fft_size (e.g. 11 Hz for 44.1k/4096) to guarantee
+separate bins; 10 Hz is typical and sufficient for that config.
+
+A target waveform SNR is sampled uniformly from `snr_range` (default: (-20, 10) dB). Noise
+amplitude is derived on demand via `noise_amplitude(scene)` from station amplitudes and propagation.
 
 The STFT tone concentration adds ~28 dB on top (Hann-4096), giving:
 
@@ -76,13 +82,35 @@ function BandScene(rng::AbstractRNG;
                    contest::AbstractContest = random_contest(rng),
                    mode::AbstractConversationMode = random_mode(rng),
                    propagation::PropagationCondition = moderate_propagation(),
-                   snr_range::Tuple{Float64,Float64} = (-20.0, 10.0))
+                   snr_range::Tuple{Float64,Float64} = (-20.0, 10.0),
+                   min_tone_separation_Hz::Float64 = 10.0)
 
     callsigns = generate_callsigns(rng, num_stations)
     styles = select_styles(rng, mode, num_stations)
     ref_freq = clamp(600.0 + 80.0 * randn(rng), 400.0, 700.0)
+
+    # Assign tones with minimum separation so stations show in distinct spectrogram bins.
+    step = min_tone_separation_Hz
+    caller_tone = ref_freq
+    n_other = num_stations - 1
+    other_tones = Float64[]
+    for k in 1:max(n_other, 4)
+        push!(other_tones, clamp(ref_freq + k * step, TONE_BAND[1], TONE_BAND[2]))
+        push!(other_tones, clamp(ref_freq - k * step, TONE_BAND[1], TONE_BAND[2]))
+    end
+    # Exclude caller tone so no other station shares it
+    other_tones = unique!(sort!([t for t in other_tones if t != ref_freq]))
+    while length(other_tones) < n_other
+        k = length(other_tones) + 1
+        push!(other_tones, clamp(ref_freq + k * step, TONE_BAND[1], TONE_BAND[2]))
+        other_tones = unique!(sort!(other_tones))
+    end
+    other_tones = shuffle(rng, other_tones[1:n_other])
+
+    tone_list = [caller_tone; other_tones]
+
     stations = [
-        Station(rng, call, style; ref_freq, is_caller=(i == 1))
+        Station(rng, call, style; tone_freq=tone_list[i], is_caller=(i == 1))
         for (i, (call, style)) in enumerate(zip(callsigns, styles))
     ]
 
