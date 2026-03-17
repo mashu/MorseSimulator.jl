@@ -16,6 +16,36 @@ Much faster for dataset generation.
 """
 struct DirectPath <: AbstractSpectrogramPath end
 
+# ============================================================================
+# Noise bandwidth for mel filterbank (matches real STFT noise distribution)
+# ============================================================================
+
+"""
+    mel_noise_bandwidth(filterbank) -> Vector{Float64}
+
+Per-mel-bin noise bandwidth weight. In a real STFT, white noise with power σ²
+per FFT bin produces mel noise:  mel[m] = σ² × Σ_k filters[m,k].
+
+This vector stores Σ_k filters[m,k] for each mel bin so the direct-path noise
+distribution across frequency matches the audio path. Without this, all 40 mel
+bins receive identical noise and frequency discrimination is destroyed.
+"""
+function mel_noise_bandwidth(filterbank::MelFilterbank{Float64})
+    n_filters = filterbank.n_filters
+    n_bins = size(filterbank.filters, 2)
+    bw = zeros(Float64, n_filters)
+    @inbounds for m in 1:n_filters
+        for k in 1:n_bins
+            bw[m] += filterbank.filters[m, k]
+        end
+    end
+    return bw
+end
+
+# ============================================================================
+# Main generation
+# ============================================================================
+
 """
     generate_spectrogram(::DirectPath, rng, transcript, scene; kwargs...) -> SpectrogramResult
 
@@ -52,6 +82,9 @@ function generate_spectrogram(::DirectPath, rng::AbstractRNG,
     channel = ChannelConfig(rng, scene)
     frame_times = [(j - 1) * stft_config.hop_size / sample_rate for j in 1:n_frames]
 
+    # Precompute per-bin noise bandwidth weights (matches real STFT noise distribution)
+    noise_bw = mel_noise_bandwidth(filterbank)
+
     # For each station, compute analytic contribution
     for se in scene_events.station_events
         frame_amplitudes = envelope_at_frames(se.events, frame_times, envelope_type)
@@ -72,11 +105,13 @@ function generate_spectrogram(::DirectPath, rng::AbstractRNG,
         tone_bin = clamp(tone_bin, 1, stft_config.fft_size ÷ 2 + 1)
         mel_response = filterbank.filters[:, tone_bin]
 
-        # Fill spectrogram: power ∝ amplitude² × filter_weight² × window_energy
+        # Fill spectrogram: power ∝ amplitude² × filter_weight × window_energy
+        # Mel filterbank applies LINEARLY to power spectrum: mel[m] = Σ_k filters[m,k] * P[k]
+        # For a single-bin tone at bin k: mel[m] = filters[m,k] * P[k]
         for j in 1:n_frames
             power = (se.signal_amplitude * frame_amplitudes[j])^2 * win_energy
             @inbounds for m in 1:filterbank.n_filters
-                mel_spec[m, j] += power * mel_response[m]^2
+                mel_spec[m, j] += power * mel_response[m]
             end
         end
     end
@@ -92,8 +127,9 @@ function generate_spectrogram(::DirectPath, rng::AbstractRNG,
     end
 
     # Noise (dispatch: Gaussian = frame-varying power; Impulsive = random burst frames)
+    # noise_bw weights each mel bin by its integrated bandwidth to match real STFT
     for nm in channel.noise_models
-        add_noise_to_mel!(rng, mel_spec, nm, win_energy, stft_config.hop_size)
+        add_noise_to_mel!(rng, mel_spec, nm, win_energy, stft_config.hop_size; noise_bw)
     end
 
     # Normalize peak (approximate match to audio path)
@@ -181,11 +217,15 @@ end
 # ============================================================================
 
 """
-Gaussian: add noise power per frame with random scale so frame-to-frame variance
-matches STFT of AWGN (magnitude² per bin has mean σ², variance 2σ⁴).
+Gaussian: add noise power per frame with random scale, weighted by each mel
+filter's bandwidth so noise distribution matches real STFT behavior.
+
+`noise_bw[m]` = Σ_k filters[m,k] — the integrated bandwidth of mel bin m.
+Without this weighting, all bins get identical noise and frequency info is lost.
 """
 function add_noise_to_mel!(rng::AbstractRNG, mel_spec::AbstractMatrix{Float64},
-                           nm::GaussianNoise{T}, win_energy::Float64, hop_size::Int) where T
+                           nm::GaussianNoise{T}, win_energy::Float64, hop_size::Int;
+                           noise_bw::Vector{Float64} = ones(Float64, size(mel_spec, 1))) where T
     base_power = Float64(nm.amplitude^2) * win_energy
     n_frames = size(mel_spec, 2)
     n_filters = size(mel_spec, 1)
@@ -194,18 +234,19 @@ function add_noise_to_mel!(rng::AbstractRNG, mel_spec::AbstractMatrix{Float64},
         scale = max(0.2, 1.0 + sqrt(2.0) * randn(rng))
         frame_power = base_power * scale
         @inbounds for m in 1:n_filters
-            mel_spec[m, j] += frame_power
+            mel_spec[m, j] += frame_power * noise_bw[m]
         end
     end
     return nothing
 end
 
 """
-Impulsive: add burst power in random frames. P(impulse in frame) from per-sample
-probability; flat across mel bins (impulse in time ≈ flat spectrum).
+Impulsive: add burst power in random frames, weighted by bandwidth.
+P(impulse in frame) from per-sample probability; weighted across mel bins.
 """
 function add_noise_to_mel!(rng::AbstractRNG, mel_spec::AbstractMatrix{Float64},
-                           imp::ImpulsiveNoise{T}, win_energy::Float64, hop_size::Int) where T
+                           imp::ImpulsiveNoise{T}, win_energy::Float64, hop_size::Int;
+                           noise_bw::Vector{Float64} = ones(Float64, size(mel_spec, 1))) where T
     n_frames = size(mel_spec, 2)
     n_filters = size(mel_spec, 1)
     frame_imp_prob = 1.0 - (1.0 - Float64(imp.probability))^hop_size
@@ -213,7 +254,7 @@ function add_noise_to_mel!(rng::AbstractRNG, mel_spec::AbstractMatrix{Float64},
     for j in 1:n_frames
         if rand(rng) < frame_imp_prob
             @inbounds for m in 1:n_filters
-                mel_spec[m, j] += imp_power
+                mel_spec[m, j] += imp_power * noise_bw[m]
             end
         end
     end
