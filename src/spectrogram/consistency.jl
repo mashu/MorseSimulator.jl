@@ -1,7 +1,7 @@
 """
     MorseSimulator.jl/src/spectrogram/consistency.jl
 
-Consistency metrics for comparing mel-spectrograms generated
+Consistency metrics for comparing spectrograms generated
 via the audio path (Mode 1) and direct path (Mode 2).
 """
 
@@ -146,8 +146,8 @@ end
 Run all consistency metrics between audio-path and direct-path spectrograms.
 """
 function compare_paths(a::SpectrogramResult{T}, b::SpectrogramResult{T}) where T
-    sa = a.mel_spectrogram
-    sb = b.mel_spectrogram
+    sa = a.spectrogram
+    sb = b.spectrogram
     ConsistencyReport(
         compare(L2SpectralError(), sa, sb),
         compare(CosineSimilarity(), sa, sb),

@@ -65,17 +65,17 @@ end
 """
     plot_spectrogram(result; title, width, height) -> Plot
 
-Display a mel-spectrogram using UnicodePlots heatmap.
+Display a spectrogram using UnicodePlots heatmap.
 """
 function plot_spectrogram(result::SpectrogramResult{T};
-                          title::String = "Mel Spectrogram",
+                          title::String = "Spectrogram",
                           width::Int = 80,
                           height::Int = 20) where T<:AbstractFloat
-    spec = result.mel_spectrogram
+    spec = result.spectrogram
 
     # Subsample if too wide for terminal
     n_frames = size(spec, 2)
-    n_mels = size(spec, 1)
+    n_bins = size(spec, 1)
 
     if n_frames > width * 2
         step = n_frames ÷ (width * 2)
@@ -85,7 +85,7 @@ function plot_spectrogram(result::SpectrogramResult{T};
     plt = heatmap(spec;
         title = title,
         xlabel = "Time (frames)",
-        ylabel = "Mel bin",
+        ylabel = "Freq bin",
         width = width,
         height = height,
         colormap = :inferno

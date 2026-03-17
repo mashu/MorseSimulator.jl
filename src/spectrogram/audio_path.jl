@@ -1,51 +1,51 @@
 """
     MorseSimulator.jl/src/spectrogram/audio_path.jl
 
-Mode 1: Audio path for mel-spectrogram generation.
-Morse → waveform → STFT → mel spectrogram.
+Mode 1: Audio path for spectrogram generation.
+Morse → waveform → STFT → linear band power spectrogram.
 This path produces audio that can be saved for inspection.
 """
 
 """
     AudioPath <: AbstractSpectrogramPath
 
-Generate mel-spectrogram via full audio waveform synthesis.
+Generate spectrogram via full audio waveform synthesis.
 """
 struct AudioPath <: AbstractSpectrogramPath end
 
 """
     SpectrogramResult{T<:AbstractFloat}
 
-Result of mel-spectrogram generation.
+Result of spectrogram generation (linear band, not mel).
 
 # Fields
-- `mel_spectrogram::Matrix{T}` — mel spectrogram (n_mels × n_frames)
+- `spectrogram::Matrix{T}` — (n_bins × n_frames), log10 scale
 - `label::String` — training label
 - `sample_rate::Int` — audio sample rate
 - `duration::T` — total duration in seconds
 - `stft_config::STFTConfig{T}` — STFT parameters used
-- `filterbank::MelFilterbank{T}` — mel filterbank used
+- `linear_band::LinearBand` — band configuration
 """
 struct SpectrogramResult{T<:AbstractFloat}
-    mel_spectrogram::Matrix{T}
+    spectrogram::Matrix{T}
     label::String
     sample_rate::Int
     duration::T
     stft_config::STFTConfig{T}
-    filterbank::MelFilterbank{T}
+    linear_band::LinearBand
 end
 
 """
     generate_spectrogram(::AudioPath, rng, transcript, scene; kwargs...) -> (SpectrogramResult, MixedSignal)
 
-Generate mel-spectrogram via audio synthesis.
+Generate linear band spectrogram via audio synthesis.
 Also returns the mixed signal for audio inspection.
 """
 function generate_spectrogram(::AudioPath, rng::AbstractRNG,
                                transcript::Transcript, scene::BandScene;
                                sample_rate::Int = 44100,
                                stft_config::STFTConfig{Float64} = STFTConfig(),
-                               filterbank::MelFilterbank{Float64} = MelFilterbank(
+                               linear_band::LinearBand = LinearBand(
                                    fft_size=stft_config.fft_size, sample_rate=sample_rate),
                                envelope_type::AbstractEnvelope{Float64} = RaisedCosineEnvelope())
 
@@ -62,21 +62,21 @@ function generate_spectrogram(::AudioPath, rng::AbstractRNG,
     # Power spectrogram
     pspec = power_spectrogram(stft_result)
 
-    # Apply mel filterbank
-    mel_spec = apply_filterbank(filterbank, pspec)
+    # Slice to band (linear, no mel)
+    band_spec = pspec[linear_band.bin_lo:linear_band.bin_hi, :]
 
     # Normalize peak (match direct path so both outputs on same scale)
-    peak = maximum(mel_spec)
+    peak = maximum(band_spec)
     if peak > 0
-        mel_spec ./= peak
+        band_spec = band_spec ./ peak
     end
 
     # Log compression
-    mel_spec = log10.(max.(mel_spec, 1e-10))
+    band_spec = log10.(max.(band_spec, 1e-10))
 
     result = SpectrogramResult{Float64}(
-        mel_spec, transcript.label, sample_rate,
-        mixed.duration, stft_config, filterbank
+        band_spec, transcript.label, sample_rate,
+        mixed.duration, stft_config, linear_band
     )
 
     return result, mixed, scene_events

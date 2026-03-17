@@ -2,11 +2,12 @@
     MorseSimulator
 
 Simulate realistic CW Morse amateur radio communications and generate
-mel-spectrogram datasets for training neural network decoders.
+spectrogram datasets for training neural network decoders.
+Uses linear band (not mel) for ~10 Hz resolution in 200–900 Hz.
 
 ## Pipeline
 
-    Conversation → Morse Timing → Signal → Mel Spectrogram
+    Conversation → Morse Timing → Signal → Linear band spectrogram
 
 ## Quick start
 
@@ -66,11 +67,12 @@ include("signal/audio.jl")
 # ============================================================================
 # Spectrogram Layer
 # ============================================================================
-include("spectrogram/mel.jl")
 include("spectrogram/stft.jl")
+include("spectrogram/linear_band.jl")
 include("spectrogram/audio_path.jl")
 include("spectrogram/direct_path.jl")
 include("spectrogram/consistency.jl")
+include("spectrogram/mel.jl")  # kept for hz_to_mel / mel_to_hz if needed
 
 # ============================================================================
 # Visualization
@@ -127,9 +129,10 @@ export SinusoidalFading, RayleighFading
 export ChannelConfig, MixedSignal, AudioConfig
 
 # Types — Spectrogram
-export MelFilterbank, STFTConfig
+export STFTConfig, LinearBand
 export AudioPath, DirectPath
 export SpectrogramResult
+export MelFilterbank  # legacy; prefer LinearBand for CW
 export L2SpectralError, CosineSimilarity, KLDivergence, MeanAbsoluteError
 export ConsistencyReport
 
@@ -173,8 +176,8 @@ export mix_signals
 export save_audio, save_wav, load_wav
 
 # Functions — Spectrogram
-export hz_to_mel, mel_to_hz
-export apply_filterbank
+export n_bins, fft_bin_for_freq, band_bin_for_fft_bin, bin_center_hz
+export hz_to_mel, mel_to_hz, apply_filterbank
 export compute_stft, power_spectrogram, log_power_spectrogram
 export generate_spectrogram
 export compare, compare_paths
